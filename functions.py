@@ -219,7 +219,7 @@ class DocumentManager:
         FROM blocks
         WHERE box = '{notebook_id}' AND type = 'd'
         AND (hpath = '{normalized_path}' OR hpath LIKE '{normalized_path}/%')
-        ORDER BY created
+        ORDER BY created LIMIT 5000
         """
 
         data = self.api.call_api("/api/query/sql", {"stmt": sql_query})
