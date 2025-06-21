@@ -1,2 +1,11 @@
 requests
 python-dotenv
+beautifulsoup4
+lxml
+html5lib
+markdownify
+html2text
+Pillow
+urllib3
+aiohttp
+aiofiles
