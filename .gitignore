@@ -74,5 +74,6 @@ Thumbs.db
 *.log
 
 # 输出目录（如果包含临时文件）
+output/
 output/*.tmp
 output/*.temp
