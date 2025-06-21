@@ -1,0 +1,167 @@
+[
+  {
+    "content": "自定义属性，含url",
+    "created": "20250621081403",
+    "id": "20250621081403-hx0zl8u",
+    "markdown": "",
+    "parent_id": "",
+    "sort": 0,
+    "subtype": "",
+    "type": "d",
+    "updated": "20250621102705"
+  },
+  {
+    "content": "为知笔记迁移文档自定义属性：\nabstract: <nil>\nurl: https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848 https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848\ncreated: 2025-06-09 23:04:19 +0000 UTC\naccessed: 2025-06-12 12:31:36 +0000 UTC\nmodified: <nil>苹果重磅论文翻车！被指测试方法有大问题……网友：Cook 该裁员了！",
+    "created": "20250621081403",
+    "id": "20250621081403-clxqrix",
+    "markdown": "# ---\n\n为知笔记迁移文档自定义属性：\nabstract: <nil>\nurl: [https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848](https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848)\ncreated: 2025-06-09 23:04:19 +0000 UTC\naccessed: 2025-06-12 12:31:36 +0000 UTC\nmodified: <nil>\n\n---\n\n苹果重磅论文翻车！被指测试方法有大问题……网友：Cook 该裁员了！",
+    "parent_id": "20250621081403-hx0zl8u",
+    "sort": 5,
+    "subtype": "h1",
+    "type": "h",
+    "updated": "20250621102705"
+  },
+  {
+    "content": "2025-06-09 17:43·人工智能学家 https://www.toutiao.com/c/user/token/MS4wLjABAAAAopm85qB5EHed92CocYuWSjILG4hacNLOMeKOxKXTHGk/?source=tuwen_detail",
+    "created": "20250621081403",
+    "id": "20250621081403-8gvt7q6",
+    "markdown": "2025-06-09 17:43·[人工智能学家](https://www.toutiao.com/c/user/token/MS4wLjABAAAAopm85qB5EHed92CocYuWSjILG4hacNLOMeKOxKXTHGk/?source=tuwen_detail)",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "来源：AGI Hunt",
+    "created": "20250621081403",
+    "id": "20250621081403-tgzjxng",
+    "markdown": "来源：AGI Hunt",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "苹果的AI 研究团队这次真的翻车了！",
+    "created": "20250621081403",
+    "id": "20250621081403-ghxk2dy",
+    "markdown": "**苹果的AI 研究团队这次真的翻车了！**",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "他们最近发布的一篇论文引发了AI 圈的集体吐槽，原因竟然是测试方法出了大问题。",
+    "created": "20250621081403",
+    "id": "20250621081403-gba3sqo",
+    "markdown": "他们最近发布的一篇论文引发了AI 圈的集体吐槽，原因竟然是**测试方法出了大问题**。",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "image assets/5e3c075bb3b21ecc3bae51e4b8a175df-20250615183338-vocbet6.jpg ",
+    "created": "20250621081403",
+    "id": "20250621081403-d3xebaz",
+    "markdown": "![image](assets/5e3c075bb3b21ecc3bae51e4b8a175df-20250615183338-vocbet6.jpg)",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "见前文：苹果宣判推理模型死刑！Google CEO：忘了AGI吧，先用好AJI",
+    "created": "20250621081403",
+    "id": "20250621081403-xy9amr8",
+    "markdown": "见前文：苹果宣判推理模型死刑！Google CEO：忘了AGI吧，先用好AJI",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "研究者Lisan al Gaib在复现苹果论文中的汉诺塔（Tower of Hanoi）测试后发现了一个惊人的事实：模型根本不是因为推理能力不行而失败，而是因为输出token限制！",
+    "created": "20250621081403",
+    "id": "20250621081403-7p1if9k",
+    "markdown": "研究者Lisan al Gaib在复现苹果论文中的汉诺塔（Tower of Hanoi）测试后发现了一个惊人的事实：**模型根本不是因为推理能力不行而失败，而是因为输出token限制！**",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "image assets/60ef00128e5cf80619d90503519d1757-20250615183338-oktw4wi.jpg ",
+    "created": "20250621081403",
+    "id": "20250621081403-cyyfl0e",
+    "markdown": "![image](assets/60ef00128e5cf80619d90503519d1757-20250615183338-oktw4wi.jpg)",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "要知道，汉诺塔问题需要至少2^N - 1步才能解决，而输出格式需要每步10个token外加一些固定内容。",
+    "created": "20250621081403",
+    "id": "20250621081403-159tyw2",
+    "markdown": "要知道，汉诺塔问题需要**至少2^N - 1步**才能解决，而输出格式需要每步10个token外加一些固定内容。",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "这意味着什么？",
+    "created": "20250621081403",
+    "id": "20250621081403-utt76ju",
+    "markdown": "这意味着什么？",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250615183338"
+  },
+  {
+    "content": "为知笔记迁移文档自定义属性：\nabstract: <nil>\nurl: https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848 https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848\ncreated: 2025-06-09 23:04:19 +0000 UTC\naccessed: 2025-06-12 12:31:36 +0000 UTC\nmodified: <nil>",
+    "created": "20250621102116",
+    "id": "20250621102116-mzjwqy9",
+    "markdown": "为知笔记迁移文档自定义属性：\nabstract: <nil>\nurl: [https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848](https://www.toutiao.com/article/7517174713618104851/?log_from=396a8c9db2481_1750471891848)\ncreated: 2025-06-09 23:04:19 +0000 UTC\naccessed: 2025-06-12 12:31:36 +0000 UTC\nmodified: <nil>",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 10,
+    "subtype": "",
+    "type": "p",
+    "updated": "20250621102116"
+  },
+  {
+    "content": "",
+    "created": "20250621102116",
+    "id": "20250621102116-fe1q3t4",
+    "markdown": "---",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 100,
+    "subtype": "",
+    "type": "tb",
+    "updated": "20250621102116"
+  },
+  {
+    "content": "",
+    "created": "20250621102116",
+    "id": "20250621102116-01nfz5s",
+    "markdown": "---",
+    "parent_id": "20250621081403-clxqrix",
+    "sort": 100,
+    "subtype": "",
+    "type": "tb",
+    "updated": "20250621102116"
+  }
+]
