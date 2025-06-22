@@ -12,8 +12,11 @@ from pathlib import Path
 class WizNoteClient:
     AS_URL = 'https://as.wiz.cn'
 
-    def __init__(self, config_path='config.json'):
-        self.config = self._load_config(config_path)
+    def __init__(self, config_path=None):
+        if config_path:
+            self.config = self._load_config(config_path)
+        else:
+            self.config = None
         self.token = None
         self.kb_info = None
 

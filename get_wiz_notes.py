@@ -4,8 +4,10 @@
 
 import sys
 import logging
+import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dotenv import load_dotenv
 
 # 导入各个模块
 from export_wiznotes.wiz_client import WizNoteClient
@@ -26,7 +28,7 @@ def read_folders_from_log(log_file):
 
 def export_folder(args):
     """导出单个文件夹的笔记"""
-    folder, client, export_dir, max_notes, reexport_dot_files = args
+    folder, client, export_dir, max_notes = args
     try:
         exporter = NoteExporter(client)
         logging.info(f"开始导出文件夹: {folder}")
@@ -34,8 +36,7 @@ def export_folder(args):
             folder=folder,
             export_dir=export_dir,
             max_notes=max_notes,
-            resume=True,
-            reexport_dot_files=reexport_dot_files
+            resume=True
         )
         logging.info(f"文件夹 {folder} 导出完成")
         return True
@@ -46,37 +47,54 @@ def export_folder(args):
 
 def main():
     """主函数"""
+    # 加载环境变量
+    load_dotenv()
+
     # ========== 配置参数 ==========
     # 基础配置
-    config_path = Path.cwd().parent / "account" / "web_accounts.json"
     export_dir = Path.cwd() / "export_wiznotes" / "output"
     max_notes = None  # 不限制笔记数量，自动处理超过1000条笔记的情况（通过双向查询和去重）
-    log_file = export_dir / "为知笔记目录.log"
 
-    # 修复选项：是否重新导出包含"."的文件名（用于修复之前的导出问题）
-    # 如果之前导出时遇到文件名截断问题，设置为True；正常情况下设置为False
-    reexport_dot_files = False  # 设置为True来修复之前的导出问题
+    # 默认导出"My Emails"文件夹
+    default_folders = ["/My Emails/"]
 
     # 性能配置
-    max_workers = 10  # 配置并行下载的线程数
+    max_workers = 3  # 配置并行下载的线程数
 
     try:
         # 设置日志
         setup_logging(export_dir)
 
+        # 检查环境变量
+        wiz_username = os.getenv('WIZ_USERNAME')
+        wiz_password = os.getenv('WIZ_PASSWORD')
+
+        if not wiz_username or not wiz_password:
+            logging.error("请在.env文件中设置WIZ_USERNAME和WIZ_PASSWORD")
+            print("请在项目根目录创建.env文件，并添加以下配置：")
+            print("WIZ_USERNAME=your_username@example.com")
+            print("WIZ_PASSWORD=your_password")
+            return
+
+        # 创建临时配置
+        temp_config = {
+            'wiz': {
+                'username': wiz_username,
+                'password': wiz_password
+            }
+        }
+
         # 创建客户端并登录
-        client = WizNoteClient(config_path)
+        client = WizNoteClient()
+        client.config = temp_config
         client.login()
 
-        # 读取所有文件夹
-        folders = read_folders_from_log(log_file)
-        logging.info(f"共读取到 {len(folders)} 个文件夹")
-
-        if reexport_dot_files:
-            logging.info("已启用重新导出包含'.'的文件名功能，将修复之前的导出问题")
+        # 使用默认文件夹列表
+        folders = default_folders
+        logging.info(f"将导出以下文件夹: {folders}")
 
         # 准备导出参数
-        export_args = [(folder, client, export_dir, max_notes, reexport_dot_files) for folder in folders]
+        export_args = [(folder, client, export_dir, max_notes) for folder in folders]
 
         # 使用线程池并行导出
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

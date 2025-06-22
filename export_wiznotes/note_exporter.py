@@ -24,7 +24,7 @@ class NoteExporter:
     def __init__(self, client):
         self.client = client
 
-    def export_notes(self, folder, export_dir='export_wiznotes/output', max_notes=1000, resume=True, reexport_dot_files=False):
+    def export_notes(self, folder, export_dir='export_wiznotes/output', max_notes=1000, resume=True):
         """导出某文件夹下所有笔记，支持断点续传
 
         Args:
@@ -32,7 +32,6 @@ class NoteExporter:
             export_dir: 导出目录
             max_notes: 最大获取笔记数量
             resume: 是否启用断点续传
-            reexport_dot_files: 是否强制重新导出文件名中包含"."的笔记（用于修复之前的导出问题）
         """
         try:
             # 创建导出目录
@@ -78,25 +77,7 @@ class NoteExporter:
                     note_title = note.get('title', 'Untitled')
 
                     # 检查是否已导出
-                    skip_export = False
                     if doc_guid in exported_guids:
-                        # 如果启用了重新导出包含"."的文件名，且文件名包含"."，则不跳过
-                        if reexport_dot_files and '.' in note_title:
-                            # 检查"."是否为真正的文件扩展名
-                            if note_title.lower().endswith(('.md', '.txt', '.html', '.htm')):
-                                # 如果以常见扩展名结尾，跳过（已经是真正的扩展名）
-                                skip_export = True
-                            else:
-                                # 包含"."但不是真正的扩展名，强制重新导出
-                                logging.info(f"强制重新导出包含'.'的笔记: 《{note_title}》")
-                                skip_export = False
-
-                                # 清理可能存在的旧的截断文件
-                                self._cleanup_old_truncated_files(current_path, note_title)
-                        else:
-                            skip_export = True
-
-                    if skip_export:
                         logging.debug(f"跳过已导出的笔记: 《{note_title}》")
                         exported_count += 1
                         continue
