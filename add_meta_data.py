@@ -13,7 +13,7 @@ modified: custom-modified
 """
 import logging
 from pathlib import Path
-from functions import create_siyuan_client, create_managers
+from utilities import create_siyuan_client, create_managers
 
 # --- 用户配置 ---
 # 需要处理的笔记本名称
