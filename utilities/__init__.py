@@ -13,6 +13,13 @@ from .markdown_importer import MarkdownImporter
 from .media_manager import MediaManager
 from .common import setup_logging, DEFAULT_API_URL, DEFAULT_API_TOKEN
 
+# URL转Markdown相关模块
+from .web_downloader import WebDownloader
+from .html_converter import HTMLConverter
+from .media_downloader import MediaDownloader
+from .clipboard_manager import ClipboardManager
+from .url_to_markdown import URLToMarkdownConverter
+
 # 便捷函数
 def create_siyuan_client(api_url: str = None, api_token: str = None) -> SiyuanAPI:
     """创建思源API客户端"""
@@ -43,7 +50,12 @@ def create_markdown_importer(api_client: SiyuanAPI = None) -> MarkdownImporter:
 
     return MarkdownImporter(api_client)
 
+def create_url_to_markdown_converter(output_dir: str = "output", converter_lib: str = "auto") -> URLToMarkdownConverter:
+    """创建URL转Markdown转换器实例"""
+    return URLToMarkdownConverter(output_dir, converter_lib)
+
 __all__ = [
+    # 思源笔记相关
     'SiyuanAPI',
     'NotebookManager',
     'DocumentManager',
@@ -58,5 +70,13 @@ __all__ = [
     'create_siyuan_client',
     'create_managers',
     'create_media_manager',
-    'create_markdown_importer'
+    'create_markdown_importer',
+
+    # URL转Markdown相关
+    'WebDownloader',
+    'HTMLConverter',
+    'MediaDownloader',
+    'ClipboardManager',
+    'URLToMarkdownConverter',
+    'create_url_to_markdown_converter'
 ]
