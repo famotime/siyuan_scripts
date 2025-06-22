@@ -64,7 +64,7 @@ class NoteExporter:
             tag_map = self.client.get_all_tags()
 
             # 获取文件夹下所有笔记（自动处理超过1000条笔记的情况）
-            logging.info(f"开始获取文件夹 {folder} 下的所有笔记...")
+            # logging.info(f"开始获取文件夹 {folder} 下的所有笔记...")
             note_list = get_all_notes_in_folder(self.client, folder)
             total_notes = len(note_list)
             exported_count = 0

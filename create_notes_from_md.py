@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 # 导入通用函数库
-from functions import (
+from utilities import (
     setup_logging,
     create_siyuan_client,
     create_markdown_importer,
@@ -24,7 +24,7 @@ from functions import (
 logger = setup_logging()
 
 # 默认配置
-DEFAULT_MD_FOLDER = "export_wiznotes/output/My Emails"
+DEFAULT_MD_FOLDER = "./export_wiznotes/output/My Emails"
 DEFAULT_NOTEBOOK_NAME = "剪藏笔记本"
 DEFAULT_PARENT_FOLDER = "/Web收集箱/来自为知笔记"
 
@@ -94,12 +94,12 @@ def main():
         logger.info(f"导入失败: {result.get('error', 0)}")
         if upload_media and result.get('media_uploaded', 0) > 0:
             logger.info(f"媒体文件: {result.get('media_uploaded', 0)} 个")
-        logger.info(result.get('message', '导入完成'))
+        # logger.info(result.get('message', '导入完成'))
 
         if result.get('success', 0) > 0:
-            logger.info(f"✅ 成功导入 {result['success']} 个文件到笔记本「{notebook_name}」")
-            if upload_media and result.get('media_uploaded', 0) > 0:
-                logger.info(f"📎 成功上传 {result['media_uploaded']} 个媒体文件")
+            logger.info(f"✅ 成功导入 {result['success']} 个文件到「{notebook_name}」{parent_folder}\n")
+            # if upload_media and result.get('media_uploaded', 0) > 0:
+            #     logger.info(f"📎 成功上传 {result['media_uploaded']} 个媒体文件")
 
         if result.get('error', 0) > 0:
             logger.warning(f"⚠️ 有 {result['error']} 个文件导入失败，请检查日志")
