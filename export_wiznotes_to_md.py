@@ -52,7 +52,7 @@ def main():
 
     # ========== 配置参数 ==========
     # 基础配置
-    export_dir = Path.cwd() / "export_wiznotes" / "output"
+    export_dir = Path("H:/为知笔记导出MD备份")
     max_notes = None  # 不限制笔记数量，自动处理超过1000条笔记的情况（通过双向查询和去重）
 
     # 默认导出"My Emails"文件夹

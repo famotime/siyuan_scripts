@@ -1,6 +1,6 @@
 """
-结合 export_wiznotes_to_md.py 和 create_notes_from_md.py：
-1. 转换为知笔记指定目录下笔记为markdown文件；
+结合 urls_to_markdown.py 和 create_notes_from_md.py：
+1. 将剪贴板中的URL转换为markdown文件；
 2. 将MD目录下markdown文件导入到思源笔记；
 3. 将MD目录下的md文件移动到"已转思源"目录
 """
@@ -9,45 +9,45 @@ import os
 import sys
 from pathlib import Path
 import shutil
+import asyncio
 
 # 导入相关脚本的main函数
-import export_wiznotes_to_md
+import urls_to_markdown
 import create_notes_from_md
 
 # 导入日志模块
 from utilities import setup_logging
 
 # 配置参数
-DEFAULT_MD_FOLDER = "H:/为知笔记导出MD备份/My Emails"
+DEFAULT_MD_FOLDER = "H:/为知笔记导出MD备份/urls_to_markdown"
 
-def step1_export_wiz_notes():
-    """步骤1：调用export_wiznotes_to_md.py的main函数导出为知笔记"""
-    logger.info("=== 步骤1：调用export_wiznotes_to_md.py导出为知笔记 ===")
+def step1_urls_to_markdown():
+    """步骤1：调用urls_to_markdown.py的main函数导出为知笔记"""
+    logger.info("=== 步骤1：调用urls_to_markdown.py导出为知笔记 ===")
 
     try:
-        # 直接调用get_wiz_notes的main函数
-        export_wiznotes_to_md.main()
-        return True
+        # 直接调用urls_to_markdown的main函数
+        return asyncio.run(urls_to_markdown.main())
 
     except SystemExit as e:
         # 处理sys.exit()调用
         if e.code == 0:
             return True
         else:
-            logger.error(f"❌ export_wiznotes_to_md.py 执行失败，退出码: {e.code}")
+            logger.error(f"❌ urls_to_markdown.py 执行失败，退出码: {e.code}")
             return False
 
     except Exception as e:
-        logger.error(f"调用export_wiznotes_to_md.py时发生异常: {e}")
+        logger.error(f"调用urls_to_markdown.py时发生异常: {e}")
         return False
 
-def step2_import_to_siyuan():
+def step2_import_to_siyuan(md_folder=DEFAULT_MD_FOLDER):
     """步骤2：调用create_notes_from_md.py的main函数导入到思源笔记"""
     logger.info("\n=== 步骤2：调用create_notes_from_md.py导入到思源笔记 ===")
 
     try:
         # 直接调用create_notes_from_md的main函数
-        create_notes_from_md.main()
+        create_notes_from_md.main(md_folder)
         return True
 
     except SystemExit as e:
@@ -117,8 +117,8 @@ def main():
     logger = setup_logging()
 
     try:
-        # 步骤1：调用export_wiznotes_to_md.py的main函数
-        if not step1_export_wiz_notes():
+        # 步骤1：调用urls_to_markdown.py的main函数
+        if not step1_urls_to_markdown():
             logger.error("❌ 步骤1失败，终止流程")
             return
 

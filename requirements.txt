@@ -10,3 +10,4 @@ urllib3
 aiohttp
 aiofiles
 qiniu
+pyperclip

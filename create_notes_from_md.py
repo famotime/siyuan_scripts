@@ -24,9 +24,9 @@ from utilities import (
 logger = setup_logging()
 
 # 默认配置
-DEFAULT_MD_FOLDER = "./export_wiznotes/output/My Emails"
+DEFAULT_MD_FOLDER = Path("H:/为知笔记导出MD备份/My Emails")
 DEFAULT_NOTEBOOK_NAME = "剪藏笔记本"
-DEFAULT_PARENT_FOLDER = "/Web收集箱/来自为知笔记"
+DEFAULT_PARENT_FOLDER = "/Web收集箱/urls2markdown"
 
 
 def test_connection(api_client):
@@ -41,17 +41,12 @@ def test_connection(api_client):
         return False
 
 
-def main():
+def main(md_folder=DEFAULT_MD_FOLDER, notebook_name=DEFAULT_NOTEBOOK_NAME, parent_folder=DEFAULT_PARENT_FOLDER, upload_media=True, convert_soft_breaks=True):
     """主函数"""
     try:
         # 获取配置
         api_token = os.getenv("SIYUAN_API_TOKEN", "")
         api_url = os.getenv("SIYUAN_API_URL")
-        md_folder = os.getenv("MD_FOLDER", DEFAULT_MD_FOLDER)
-        notebook_name = os.getenv("NOTEBOOK_NAME", DEFAULT_NOTEBOOK_NAME)
-        parent_folder = os.getenv("PARENT_FOLDER", DEFAULT_PARENT_FOLDER)
-        upload_media = os.getenv("UPLOAD_MEDIA", "true").lower() == "true"
-        convert_soft_breaks = os.getenv("CONVERT_SOFT_BREAKS", "true").lower() == "true"
 
         logger.info("=== 思源笔记 MD 文件导入工具 ===")
         logger.info(f"MD文件夹: {md_folder}")
