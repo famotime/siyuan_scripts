@@ -4,6 +4,16 @@
 
 ## 新增功能 🆕
 
+### 七牛云批量删除工具 (delete_qiniu_files.py)
+
+新增了七牛云文件批量删除功能，支持：
+
+- **获取文件列表**：支持按前缀过滤和分页获取
+- **批量删除文件**：支持分批处理大量文件
+- **按前缀删除**：删除指定前缀的所有文件
+- **安全确认机制**：防止误删除操作
+- **详细日志记录**：完整的操作日志和错误处理
+
 ### URL到Markdown转换器 (url2markdown.py)
 
 新增了高级的Web页面到Markdown转换功能，支持：
@@ -34,8 +44,61 @@ pip install -r requirements.txt
 - `aiohttp`：异步HTTP客户端
 - `aiofiles`：异步文件操作
 - `Pillow`：图片处理（可选）
+- `qiniu`：七牛云Python SDK
 
 ## 使用方法
+
+### 七牛云批量删除工具
+
+#### 快速开始
+
+```bash
+# 1. 安装依赖
+pip install qiniu python-dotenv
+
+# 2. 配置环境变量（创建.env文件）
+QINIU_ACCESS_KEY=你的AccessKey
+QINIU_SECRET_KEY=你的SecretKey
+QINIU_BUCKET_NAME=你的存储空间名称
+
+# 3. 运行测试
+python test_qiniu_delete.py
+
+# 4. 查看详细使用说明
+# 请参考：七牛云批量删除使用说明.md
+```
+
+#### Python代码使用
+
+```python
+from delete_qiniu_files import QiniuFileDeleter
+
+# 初始化删除工具
+deleter = QiniuFileDeleter()
+
+# 获取文件列表
+files = deleter.get_file_list("your-bucket-name")
+print(f"找到 {len(files)} 个文件")
+
+# 删除指定前缀的文件（需要确认）
+result = deleter.delete_files_by_prefix(
+    "your-bucket-name",
+    prefix="temp/",
+    confirm=True  # 必须设置为True
+)
+print(f"删除结果: {result}")
+
+# 批量删除指定文件
+files_to_delete = ["file1.jpg", "file2.png"]
+result = deleter.delete_files_batch("your-bucket-name", files_to_delete)
+```
+
+#### 安全提醒 ⚠️
+
+- **删除操作不可逆**：请在操作前备份重要数据
+- **需要确认参数**：删除操作必须设置 `confirm=True`
+- **建议测试环境**：先在测试环境验证功能
+- **查看详细文档**：[七牛云批量删除使用说明.md](七牛云批量删除使用说明.md)
 
 ### URL到Markdown转换器
 
@@ -165,6 +228,11 @@ SIYUAN_API_URL=http://127.0.0.1:6806
 
 # 思源笔记API Token（必需）
 SIYUAN_API_TOKEN=your_api_token_here
+
+# 七牛云配置（用于批量删除功能）
+QINIU_ACCESS_KEY=your_access_key_here
+QINIU_SECRET_KEY=your_secret_key_here
+QINIU_BUCKET_NAME=your_bucket_name_here
 ```
 
 ### 获取API Token
@@ -176,25 +244,29 @@ SIYUAN_API_TOKEN=your_api_token_here
 
 ```
 siyuan_scripts/
-├── functions.py                    # 通用函数库模块
-├── add_meta_data.py               # 元数据添加脚本
-├── url2markdown.py                # 🆕 URL到Markdown转换器
-├── url2markdown_example.py        # 🆕 转换器使用示例
-├── test_url2markdown_simple.py    # 🆕 功能测试脚本
-├── api_test.ipynb                 # API测试和数据分析
-├── requirements.txt               # Python依赖包列表
-├── .env                          # 环境变量配置文件（需自行创建）
-├── docs/                         # 文档目录
-│   ├── 思源API.md               # 思源笔记API文档
-│   ├── 思源数据库表.md           # 数据库表结构说明
-│   └── 思源块类型.md             # 块类型说明
-└── output/                       # 输出文件目录
-    ├── media/                    # 🆕 媒体文件存储目录
-    ├── get_siyuan_notes_docguids.py  # 文档GUID提取脚本
-    ├── compare_docguids.py           # 文档GUID比较脚本
-    ├── *.json                        # 各种数据导出文件
-    ├── *.md                          # 🆕 转换生成的Markdown文件
-    └── *.txt                         # 文本格式输出
+├── functions.py                       # 通用函数库模块
+├── add_meta_data.py                  # 元数据添加脚本
+├── delete_qiniu_files.py             # 🆕 七牛云批量删除工具
+├── test_qiniu_delete.py              # 🆕 七牛云删除功能测试
+├── 七牛云批量删除使用说明.md            # 🆕 详细使用说明文档
+├── 快速开始.md                       # 🆕 快速开始指南
+├── url2markdown.py                   # URL到Markdown转换器
+├── url2markdown_example.py           # 转换器使用示例
+├── test_url2markdown_simple.py       # 功能测试脚本
+├── api_test.ipynb                    # API测试和数据分析
+├── requirements.txt                  # Python依赖包列表
+├── .env                             # 环境变量配置文件（需自行创建）
+├── docs/                            # 文档目录
+│   ├── 思源API.md                  # 思源笔记API文档
+│   ├── 思源数据库表.md              # 数据库表结构说明
+│   └── 思源块类型.md                # 块类型说明
+└── output/                          # 输出文件目录
+    ├── media/                       # 媒体文件存储目录
+    ├── get_siyuan_notes_docguids.py # 文档GUID提取脚本
+    ├── compare_docguids.py          # 文档GUID比较脚本
+    ├── *.json                       # 各种数据导出文件
+    ├── *.md                         # 转换生成的Markdown文件
+    └── *.txt                        # 文本格式输出
 ```
 
 ## 模块说明

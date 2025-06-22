@@ -9,3 +9,4 @@ Pillow
 urllib3
 aiohttp
 aiofiles
+qiniu

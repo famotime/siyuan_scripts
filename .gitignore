@@ -78,3 +78,5 @@ output/
 output/*.tmp
 output/*.temp
 test/
+export_wiznotes/logs/
+export_wiznotes/output/
