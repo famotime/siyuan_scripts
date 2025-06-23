@@ -64,7 +64,7 @@ def step2_import_to_siyuan():
 
 def step3_move_files():
     """步骤3：将MD目录下的所有文件和目录移动到"已转思源"目录"""
-    logger.info("\n=== 步骤3：移动已导入笔记到“已转思源”目录 ===")
+    logger.info("\n=== 步骤3：移动已导入笔记到\"已转思源\"目录 ===")
 
     # 获取MD文件夹路径
     md_folder = os.getenv("MD_FOLDER", DEFAULT_MD_FOLDER)
