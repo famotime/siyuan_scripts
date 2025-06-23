@@ -11,3 +11,4 @@ aiohttp
 aiofiles
 qiniu
 pyperclip
+yagmail
