@@ -13,6 +13,29 @@ from datetime import datetime
 import markdownify
 from tqdm import tqdm
 
+
+class CustomMarkdownConverter(markdownify.MarkdownConverter):
+    """
+    自定义MarkdownConverter，将div标签转换为换行
+    """
+    def convert_div(self, el, text, convert_as_inline):
+        """将div标签转换为换行"""
+        # 检查div是否只包含空白内容、br标签或HTML实体
+        if not text.strip():
+            # 检查原始元素是否包含br标签或只包含空白字符/HTML实体
+            original_text = el.get_text(strip=True) if hasattr(el, 'get_text') else ''
+            has_br = el.find('br') is not None if hasattr(el, 'find') else False
+
+            # 如果div中包含br标签，或者原始文本为空（可能包含&nbsp;等HTML实体）
+            if has_br or not original_text:
+                # 返回两个换行（产生空行效果）
+                return '\n\n'
+            else:
+                # 如果div为空，返回一个换行
+                return '\n'
+        # 如果div内容不为空，在内容前后添加换行
+        return f'\n{text}\n'
+
 # 导入处理超过1000条笔记的函数
 try:
     from .get_folders_and_notes_list import get_all_notes_in_folder
@@ -191,8 +214,9 @@ class NoteExporter:
                             md_content = html_content
                             if body_match:
                                 md_content = body_match.group(1)
-                            # 用markdownify转换，保留格式
-                            md_content = markdownify.markdownify(md_content, heading_style="ATX")
+                            # 用自定义markdownify转换器转换，保留格式并将div转换为换行
+                            converter = CustomMarkdownConverter(heading_style="ATX")
+                            md_content = converter.convert(md_content)
                             # 修复markdownify转义产生的问题：去掉图片路径中的反斜杠转义
                             md_content = self._fix_markdown_escapes(md_content)
                             # 清理可能的错误代码块包装

@@ -56,7 +56,8 @@ def main():
     max_notes = None  # 不限制笔记数量，自动处理超过1000条笔记的情况（通过双向查询和去重）
 
     # 默认导出"My Emails"文件夹
-    default_folders = ["/My Emails/"]
+    # default_folders = ["/My Emails/"]
+    default_folders = ["/导出测试/"]
 
     # 性能配置
     max_workers = 3  # 配置并行下载的线程数

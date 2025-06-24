@@ -7,7 +7,7 @@ import logging
 import re
 import html
 from typing import Optional, Dict, List
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from pathlib import Path
 
 try:
@@ -29,6 +29,29 @@ except ImportError:
     HAS_HTML2TEXT = False
 
 logger = logging.getLogger(__name__)
+
+
+class CustomMarkdownConverter(markdownify.MarkdownConverter):
+    """
+    自定义MarkdownConverter，将div标签转换为换行
+    """
+    def convert_div(self, el, text, convert_as_inline):
+        """将div标签转换为换行"""
+        # 检查div是否只包含空白内容、br标签或HTML实体
+        if not text.strip():
+            # 检查原始元素是否包含br标签或只包含空白字符/HTML实体
+            original_text = el.get_text(strip=True) if hasattr(el, 'get_text') else ''
+            has_br = el.find('br') is not None if hasattr(el, 'find') else False
+
+            # 如果div中包含br标签，或者原始文本为空（可能包含&nbsp;等HTML实体）
+            if has_br or not original_text:
+                # 返回两个换行（产生空行效果）
+                return '\n\n'
+            else:
+                # 如果div为空，返回一个换行
+                return '\n'
+        # 如果div内容不为空，在内容前后添加换行
+        return f'\n{text}\n'
 
 
 class HTMLConverter:
@@ -236,13 +259,14 @@ class HTMLConverter:
     def _convert_with_markdownify(self, html_content: str) -> str:
         """使用markdownify转换"""
         try:
-            markdown_content = markdownify.markdownify(
-                html_content,
+            # 使用自定义的转换器处理div标签
+            converter = CustomMarkdownConverter(
                 heading_style=markdownify.ATX,
                 bullets='-',
                 strong_tag='**',
                 em_tag='*'
             )
+            markdown_content = converter.convert(html_content)
             return self._clean_markdown(markdown_content)
         except Exception as e:
             logger.error(f"markdownify转换失败: {e}")
