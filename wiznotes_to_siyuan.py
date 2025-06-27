@@ -19,14 +19,17 @@ from utilities import setup_logging
 
 # 配置参数
 DEFAULT_MD_FOLDER = "H:/为知笔记导出MD备份/My Emails"
+# 默认导出"My Emails"文件夹
+default_folders = ["/My Emails/"]
 
-def step1_export_wiz_notes():
+
+def step1_export_wiz_notes(default_folders):
     """步骤1：调用export_wiznotes_to_md.py的main函数导出为知笔记"""
     logger.info("=== 步骤1：调用export_wiznotes_to_md.py导出为知笔记 ===")
 
     try:
         # 直接调用get_wiz_notes的main函数
-        export_wiznotes_to_md.main()
+        export_wiznotes_to_md.main(default_folders)
         return True
 
     except SystemExit as e:

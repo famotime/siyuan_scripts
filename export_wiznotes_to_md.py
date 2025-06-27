@@ -45,7 +45,7 @@ def export_folder(args):
         return False
 
 
-def main():
+def main(default_folders):
     """主函数"""
     # 加载环境变量
     load_dotenv()
@@ -54,10 +54,6 @@ def main():
     # 基础配置
     export_dir = Path("H:/为知笔记导出MD备份")
     max_notes = None  # 不限制笔记数量，自动处理超过1000条笔记的情况（通过双向查询和去重）
-
-    # 默认导出"My Emails"文件夹
-    # default_folders = ["/My Emails/"]
-    default_folders = ["/导出测试/"]
 
     # 性能配置
     max_workers = 3  # 配置并行下载的线程数
@@ -125,4 +121,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # 导出目录列表
+    default_folders = ["/导出测试/"]
+    main(default_folders)
