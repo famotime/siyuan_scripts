@@ -12,6 +12,12 @@ from .tree_processor import TreeProcessor
 from .markdown_importer import MarkdownImporter
 from .media_manager import MediaManager
 from .common import setup_logging, DEFAULT_API_URL, DEFAULT_API_TOKEN
+from .sql_queries import (
+    COMMON_QUERIES, TABLE_QUERIES,
+    get_query_by_name, get_all_query_names,
+    get_table_query_by_name, get_all_table_query_names,
+    get_specific_tag_query, get_custom_attribute_query
+)
 
 # URL转Markdown相关模块
 from .web_downloader import WebDownloader
@@ -71,6 +77,16 @@ __all__ = [
     'create_managers',
     'create_media_manager',
     'create_markdown_importer',
+
+    # SQL查询相关
+    'COMMON_QUERIES',
+    'TABLE_QUERIES',
+    'get_query_by_name',
+    'get_all_query_names',
+    'get_table_query_by_name',
+    'get_all_table_query_names',
+    'get_specific_tag_query',
+    'get_custom_attribute_query',
 
     # URL转Markdown相关
     'WebDownloader',
