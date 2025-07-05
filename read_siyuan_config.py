@@ -12,6 +12,18 @@
 
 import json
 from pathlib import Path
+import re
+
+
+def remove_timestamp_from_text(text):
+    """移除文本中的时间戳信息，格式如 "2025-5-12 12:15:11" """
+    if not text:
+        return text
+
+    # 匹配时间戳格式: YYYY-M-D H:MM:SS 或 YYYY-MM-DD HH:MM:SS
+    timestamp_pattern = r'\s*\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}:\d{2}\s*'
+    result = re.sub(timestamp_pattern, '', text)
+    return result.strip()
 
 
 def convert_mac_to_windows_shortcut(shortcut):
@@ -181,6 +193,9 @@ def get_category_name(category_key):
 
 def get_function_name(function_key):
     """获取功能的中文名称"""
+    # 首先移除时间戳
+    clean_function_key = remove_timestamp_from_text(function_key)
+
     function_names = {
         # 通用功能
         'ai': 'AI',
@@ -353,7 +368,7 @@ def get_function_name(function_key):
         'openDrawio': '打开Drawio',
         'siyuan-drawio-plugindrawio_dock': 'Drawio停靠栏'
     }
-    return function_names.get(function_key, function_key)
+    return function_names.get(clean_function_key, clean_function_key)
 
 
 if __name__ == "__main__":

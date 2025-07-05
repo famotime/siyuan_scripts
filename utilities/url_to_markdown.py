@@ -60,11 +60,43 @@ class URLToMarkdownConverter:
         if len(filename) > 50:
             filename = filename[:50]
 
-        # # 添加时间戳避免重复
-        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # filename = f"{filename}_{timestamp}"
+        base_filename = filename
+        filename = f"{filename}.md"
 
-        return f"{filename}.md"
+        return filename
+
+    def get_unique_filename(self, filename: str) -> str:
+        """
+        获取唯一的文件名，如果文件已存在则自动添加数字后缀
+
+        :param filename: 原始文件名
+        :return: 唯一的文件名
+        """
+        output_path = self.output_dir / filename
+
+        # 如果文件不存在，直接返回原文件名
+        if not output_path.exists():
+            return filename
+
+        # 文件已存在，生成带数字后缀的文件名
+        base_name = filename.rsplit('.', 1)[0]  # 去掉扩展名
+        extension = filename.rsplit('.', 1)[-1]  # 获取扩展名
+
+        counter = 1
+        while True:
+            new_filename = f"{base_name}_{counter}.{extension}"
+            new_path = self.output_dir / new_filename
+
+            if not new_path.exists():
+                return new_filename
+
+            counter += 1
+
+            # 防止无限循环，最多尝试1000次
+            if counter > 1000:
+                # 如果还是重复，添加时间戳
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                return f"{base_name}_{timestamp}.{extension}"
 
     def build_markdown_document(self, page_info: Dict[str, str], url: str, markdown_content: str) -> str:
         """
@@ -149,6 +181,8 @@ class URLToMarkdownConverter:
             if not output_filename:
                 output_filename = self.generate_filename(page_info['title'], url)
 
+            # 确保文件名唯一，避免覆盖
+            output_filename = self.get_unique_filename(output_filename)
             output_path = self.output_dir / output_filename
 
             # 构建完整文档
@@ -176,7 +210,9 @@ class URLToMarkdownConverter:
         if collected_notes:
             md_content = "\n\n%%%\n\n".join(collected_notes)
             # 保存文件
-            collected_notes_md_path = self.output_dir / f"碎笔记{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            collected_notes_filename = f"碎笔记{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            collected_notes_filename = self.get_unique_filename(collected_notes_filename)
+            collected_notes_md_path = self.output_dir / collected_notes_filename
             collected_notes_md_path.write_text(md_content, encoding='utf-8')
             logger.info(f"Markdown文件已保存: {collected_notes_md_path}")
 

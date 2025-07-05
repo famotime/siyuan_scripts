@@ -224,7 +224,6 @@ class SQLiteQueryToCSV:
 
         return self.query_to_csv(sql, output_file, encoding)
 
-
 def run_preset_query(query_tool: SQLiteQueryToCSV, query_name: str, output_dir: Path) -> bool:
     """
     运行预设查询

@@ -216,7 +216,7 @@ COMMON_QUERIES = {
         LIMIT 1000
     """,
 
-    "文档标签统计": """
+    "包含标签最多的文档": """
         SELECT
             b.content as 文档标题,
             b.hpath as 文档路径,
