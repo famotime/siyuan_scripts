@@ -1,25 +1,26 @@
 # 思源笔记脚本工具集
 
-这是一个用于操作思源笔记（SiYuan）的Python脚本工具集，主要用于批量处理笔记数据、元数据管理、内容导入导出和媒体文件处理。
+这是一个用于操作思源笔记（SiYuan）的脚本工具集，主要用于批量处理笔记数据、元数据管理、内容导入导出等。
 
 ## 主要功能
 
-### 📝 笔记导入工具
-- **Markdown文件导入**：`create_notes_from_md.py` - 将文件夹下的Markdown文件批量导入到思源笔记
-- **为知笔记导出**：`export_wiznotes_to_md.py` - 从为知笔记导出单篇或批量导出Markdown笔记
-- **为知笔记转思源**：`wiznotes_to_siyuan.py` - 完整流程：导出为知笔记 → 导入思源笔记 → 整理文件
+### 📝 笔记导入与管理
+- **Markdown文件导入**: `create_notes_from_md.py` - 将文件夹下的Markdown文件批量导入到思源笔记。
+- **为知笔记导出**: `export_wiznotes_to_md.py` - 从为知笔记导出单篇或批量导出Markdown笔记。
+- **为知笔记转思源**: `wiznotes_to_siyuan.py` - 完整流程：导出为知笔记 -> 导入思源笔记 -> 整理文件。
+- **数据库查询导出**: `query_to_csv.py` - 执行SQL查询并将结果导出为CSV文件。
 
 ### 🌐 网页内容处理
-- **URL转Markdown**：`urls_to_markdown.py` - 将网页内容批量转换为Markdown文件，支持媒体下载
-- **URL转思源**：`urls_to_siyuan.py` - 完整流程：剪贴板URL → Markdown → 思源笔记
-- **剪贴板笔记处理**：`clipboard_notes_mailto_wiznotes.py` - 从剪贴板提取文章链接，批量发送到为知笔记
+- **URL转Markdown**: `urls_to_markdown.py` - 将网页内容批量转换为Markdown文件，支持媒体下载。
+- **URL转思源**: `urls_to_siyuan.py` - 完整流程：剪贴板URL -> Markdown -> 思源笔记。
+- **剪贴板笔记处理**: `clipboard_notes_mailto_wiznotes.py` - 从剪贴板提取文章链接，批量发送到为知笔记。
 
 ### 🏷️ 元数据管理
-- **元数据添加**：`add_meta_data.py` - 为思源笔记文档添加元数据信息
-- **配置读取**：`read_siyuan_config.py` - 读取思源笔记配置，导出快捷键设置为Markdown表格
+- **元数据添加**: `add_meta_data.py` - 为思源笔记文档添加元数据信息。
+- **配置读取**: `read_siyuan_config.py` - 读取思源笔记配置，导出快捷键设置为Markdown表格。
 
 ### ☁️ 云存储管理
-- **七牛云批量删除**：`delete_qiniu_files.py` - 七牛云文件批量删除工具，支持按前缀删除和安全确认
+- **七牛云批量删除**: `delete_qiniu_files.py` - 七牛云同步文件批量删除工具，解决官网批量删除操作缓慢问题。详见 `七牛云文件批量删除使用说明.md`。
 
 ### 🛠️ 核心工具库
 - **utilities模块**：提供统一的API客户端和管理器，包括：
@@ -32,29 +33,34 @@
 
 ### 系统要求
 - Python 3.7+
-- 思源笔记客户端运行中（用于思源相关功能）
+- 思源笔记客户端运行中（用于需要与思源交互的功能）
 
 ### 依赖包
+首先，请通过以下命令安装所有必需的库：
 ```bash
 pip install -r requirements.txt
 ```
 
-主要依赖：
-- `requests`：HTTP请求库
-- `python-dotenv`：环境变量管理
-- `beautifulsoup4`：HTML解析
-- `markdownify`：HTML到Markdown转换
-- `html2text`：另一个HTML到Markdown转换库
-- `aiohttp`：异步HTTP客户端
-- `aiofiles`：异步文件操作
-- `Pillow`：图片处理（可选）
-- `qiniu`：七牛云Python SDK
-- `yagmail`：邮件发送
+主要依赖包括：
+- `requests`
+- `python-dotenv`
+- `beautifulsoup4`
+- `lxml`
+- `html5lib`
+- `markdownify`
+- `html2text`
+- `Pillow`
+- `urllib3`
+- `aiohttp`
+- `aiofiles`
+- `qiniu`
+- `pyperclip`
+- `yagmail`
 
 ## 快速开始
 
-### 基础配置
-创建 `.env` 文件并配置以下变量：
+### 1. 基础配置
+在项目根目录创建 `.env` 文件，并根据需要配置以下变量：
 
 ```env
 # 思源笔记API配置
@@ -77,134 +83,54 @@ MAIL_189_PASSWORD=your_password
 MAIL_RECEIVER=your_wiznote_email@mywiz.cn
 ```
 
-### 常用功能示例
+### 2. 获取思源API Token
+1. 打开思源笔记客户端。
+2. 进入 `设置` -> `关于`。
+3. 在 `API Token` 处找到你的Token。
+4. 复制并粘贴到 `.env` 文件中。
 
-#### 1. 网页转思源笔记
+### 3. 运行脚本
+根据你的需求执行相应的脚本。例如，要将剪贴板中的URL一键存入思源：
 ```bash
-# 将剪贴板中的URL转换为Markdown并导入思源笔记
 python urls_to_siyuan.py
-```
-
-#### 2. Markdown文件导入
-```bash
-# 将指定文件夹的Markdown文件导入思源笔记
-python create_notes_from_md.py
-```
-
-#### 3. 为知笔记迁移
-```bash
-# 完整的为知笔记迁移流程
-python wiznotes_to_siyuan.py
-```
-
-#### 4. 网页内容下载
-```bash
-# 将网页转换为Markdown文件
-python urls_to_markdown.py
 ```
 
 ## 项目结构
 
 ```
 siyuan_scripts/
-├── 🔧 核心工具库
-│   └── utilities/                    # 通用工具模块
-│       ├── api_client.py            # 思源API客户端
-│       ├── notebook.py              # 笔记本管理
-│       ├── document.py              # 文档管理
-│       ├── block.py                 # 块管理
-│       ├── markdown_importer.py     # Markdown导入器
-│       ├── media_manager.py         # 媒体文件管理
-│       ├── url_to_markdown.py       # URL转Markdown核心功能
-│       └── ...
-│
-├── 📝 笔记导入工具
-│   ├── create_notes_from_md.py      # Markdown文件导入思源
-│   ├── export_wiznotes_to_md.py     # 为知笔记导出为Markdown
-│   └── wiznotes_to_siyuan.py        # 为知笔记完整迁移流程
-│
-├── 🌐 网页处理工具
-│   ├── urls_to_markdown.py          # URL转Markdown
-│   ├── urls_to_siyuan.py            # URL转思源完整流程
-│   └── clipboard_notes_mailto_wiznotes.py  # 剪贴板内容处理
-│
-├── 🏷️ 元数据工具
-│   ├── add_meta_data.py             # 元数据添加
-│   └── read_siyuan_config.py        # 配置读取和导出
-│
-├── ☁️ 云存储工具
-│   ├── delete_qiniu_files.py        # 七牛云批量删除
-│   └── 七牛云批量删除使用说明.md      # 详细使用说明
-│
-├── 📊 分析工具
-│   └── api_test.ipynb               # API测试和数据分析
-│
-├── 📁 目录结构
-│   ├── docs/                       # 文档目录
-│   ├── export_wiznotes/             # 为知笔记导出模块
-│   ├── output/                      # 输出文件目录
-│   ├── test/                        # 测试文件
-│   ├── requirements.txt             # 依赖包列表
-│   └── .env                         # 环境变量配置
+├── .git/
+├── .gitignore
+├── docs/                        # 项目文档
+│   ├── 思源笔记API.md
+│   └── 思源笔记数据库表与字段.md
+├── export_wiznotes/             # 为知笔记导出模块
+├── output/                      # 脚本输出目录
+├── test/                        # 测试代码
+├── utilities/                   # 核心功能工具库
+├── __pycache__/
+├── add_meta_data.py             # 添加元数据
+├── api_test.ipynb               # API测试Jupyter Notebook
+├── clipboard_notes_mailto_wiznotes.py # 剪贴板内容发送至为知
+├── create_notes_from_md.py      # 从MD文件创建笔记
+├── delete_qiniu_files.py        # 删除七牛云文件
+├── export_wiznotes_to_md.py     # 导出为知笔记为MD
+├── instuctions.md               # 其他说明文档
+├── query_to_csv.py              # 查询并导出为CSV
+├── read_siyuan_config.py        # 读取思源配置
+├── README.md                    # 本文档
+├── requirements.txt             # Python依赖
+├── urls_to_markdown.py          # 网址转Markdown
+├── urls_to_siyuan.py            # 网址转思源笔记
+├── wiznotes_to_siyuan.py        # 为知笔记迁移到思源
+└── 七牛云文件批量删除使用说明.md
 ```
 
-## 详细功能说明
-
-### utilities工具库
-提供了统一的API接口和管理器，简化了思源笔记的操作：
-
-#### 核心类
-- **SiyuanAPI**：思源笔记API客户端
-- **NotebookManager**：笔记本管理（列表、创建、打开）
-- **DocumentManager**：文档管理（查询、获取、树结构）
-- **BlockManager**：块管理（属性、子块、元数据）
-- **MarkdownImporter**：Markdown文件导入器
-- **MediaManager**：媒体文件上传和管理
-
-#### 网页处理类
-- **URLToMarkdownConverter**：URL转Markdown转换器
-- **WebDownloader**：网页内容下载器
-- **HTMLConverter**：HTML到Markdown转换器
-- **MediaDownloader**：媒体文件下载器
-
-### 脚本文件说明
-
-#### 笔记导入类
-- **create_notes_from_md.py**：批量导入Markdown文件到思源笔记，支持媒体文件上传
-- **export_wiznotes_to_md.py**：从为知笔记导出笔记为Markdown格式
-- **wiznotes_to_siyuan.py**：一键式为知笔记迁移，包含导出、导入、文件整理
-
-#### 网页处理类
-- **urls_to_markdown.py**：高级网页到Markdown转换，支持媒体下载和元数据提取
-- **urls_to_siyuan.py**：剪贴板URL一键导入思源笔记的完整流程
-- **clipboard_notes_mailto_wiznotes.py**：智能识别和处理剪贴板中的文章链接
-
-#### 元数据管理类
-- **add_meta_data.py**：为思源笔记文档添加自定义属性和元数据
-- **read_siyuan_config.py**：读取思源配置文件，导出快捷键设置为表格
-
-#### 云存储工具类
-- **delete_qiniu_files.py**：七牛云文件批量删除，支持前缀过滤和安全确认
-
-## 获取API Token
-1. 打开思源笔记
-2. 进入 `设置` → `关于` → `API Token`
-3. 复制Token到 `.env` 文件中
-
 ## 安全提醒
-- **备份数据**：操作前请备份重要笔记数据
-- **测试环境**：建议先在测试环境验证功能
-- **权限控制**：妥善保管API Token和密码信息
-- **删除确认**：删除操作不可逆，请谨慎操作
-
-## 技术特性
-- 🔄 **异步处理**：支持并发下载和处理
-- 📦 **模块化设计**：utilities工具库提供统一接口
-- 🛡️ **错误处理**：完善的异常处理和日志记录
-- 🎯 **智能识别**：自动识别内容类型和媒体文件
-- 📊 **进度追踪**：详细的操作日志和结果统计
+- **数据备份**: 在执行任何可能修改数据的脚本前，请务必备份你的思源笔记数据。
+- **凭证安全**: 妥善保管你的 `.env` 文件，不要将包含敏感信息（如API Token、密码）的文件提交到公共代码库。
+- **删除操作**: `delete_qiniu_files.py` 会永久删除云端文件，请在确认无误后再执行。
 
 ---
 
 **注意**：此工具集主要用于个人笔记管理和数据迁移，请遵守相关服务的使用条款。
-
