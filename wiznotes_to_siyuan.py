@@ -112,7 +112,7 @@ def step3_move_files():
         logger.error(f"移动MD文件失败: {move_error}")
         return False
 
-def main():
+def main(default_folders):
     """主函数：执行完整的转换流程"""
     global logger
 
@@ -121,7 +121,7 @@ def main():
 
     try:
         # 步骤1：调用export_wiznotes_to_md.py的main函数
-        if not step1_export_wiz_notes():
+        if not step1_export_wiz_notes(default_folders):
             logger.error("❌ 步骤1失败，终止流程")
             return
 
@@ -144,4 +144,4 @@ def main():
         logger.error(f"程序执行失败: {e}")
 
 if __name__ == "__main__":
-    main()
+    main(default_folders)
