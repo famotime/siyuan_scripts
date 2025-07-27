@@ -1,0 +1,296 @@
+{
+  "metadata": {
+    "total_queries": 22,
+    "categories": [
+      "基础统计",
+      "内容分析",
+      "时间维度",
+      "高级查询",
+      "特殊用途"
+    ],
+    "description": "思源笔记高级SQL查询场景集合"
+  },
+  "categories": {
+    "基础统计": {
+      "文档总体统计": {
+        "description": "统计所有文档的基本信息，包括数量、平均字数等",
+        "application": "了解笔记库的整体规模和内容分布",
+        "sql": "\n            SELECT\n                COUNT(*) as 文档总数,\n                AVG(length) as 平均字数,\n                MAX(length) as 最长文档字数,\n                MIN(length) as 最短文档字数,\n                COUNT(DISTINCT box) as 笔记本数量,\n                datetime(MIN(created)/1000, 'unixepoch', 'localtime') as 最早创建时间,\n                datetime(MAX(updated)/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks\n            WHERE type = 'd'\n        ",
+        "expected_result": "返回文档总数、平均字数、笔记本数量等基础统计信息"
+      },
+      "块类型分布统计": {
+        "description": "统计各种块类型的数量分布",
+        "application": "了解笔记内容的结构特点，如标题、段落、列表等的使用情况",
+        "sql": "\n            SELECT\n                type as 块类型,\n                CASE\n                    WHEN type = 'd' THEN '文档块'\n                    WHEN type = 'h' THEN '标题块'\n                    WHEN type = 'p' THEN '段落块'\n                    WHEN type = 'l' THEN '列表块'\n                    WHEN type = 'i' THEN '列表项块'\n                    WHEN type = 'c' THEN '代码块'\n                    WHEN type = 't' THEN '表格块'\n                    WHEN type = 'b' THEN '引述块'\n                    WHEN type = 's' THEN '超级块'\n                    WHEN type = 'm' THEN '数学公式块'\n                    ELSE '其他'\n                END as 块类型说明,\n                COUNT(*) as 数量,\n                ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM blocks), 2) as 占比百分比\n            FROM blocks\n            GROUP BY type\n            ORDER BY 数量 DESC\n        ",
+        "expected_result": "返回各种块类型的数量和占比，帮助了解笔记结构特点"
+      },
+      "笔记本统计排行": {
+        "description": "统计各笔记本的文档数量、总字数等信息",
+        "application": "了解各笔记本的使用情况，识别最活跃的笔记本",
+        "sql": "\n            SELECT\n                box as 笔记本ID,\n                COUNT(*) as 文档数量,\n                SUM(length) as 总字数,\n                AVG(length) as 平均字数,\n                datetime(MIN(created)/1000, 'unixepoch', 'localtime') as 最早文档创建时间,\n                datetime(MAX(updated)/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks\n            WHERE type = 'd'\n            GROUP BY box\n            ORDER BY 文档数量 DESC\n            LIMIT 20\n        ",
+        "expected_result": "返回各笔记本的文档统计信息，按文档数量排序"
+      },
+      "标题层级分布": {
+        "description": "统计各级标题的使用情况",
+        "application": "了解文档结构的层次性，优化文档组织方式",
+        "sql": "\n            SELECT\n                subtype as 标题级别,\n                CASE\n                    WHEN subtype = 'h1' THEN '一级标题'\n                    WHEN subtype = 'h2' THEN '二级标题'\n                    WHEN subtype = 'h3' THEN '三级标题'\n                    WHEN subtype = 'h4' THEN '四级标题'\n                    WHEN subtype = 'h5' THEN '五级标题'\n                    WHEN subtype = 'h6' THEN '六级标题'\n                    ELSE '其他'\n                END as 标题类型,\n                COUNT(*) as 使用次数,\n                ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM blocks WHERE type = 'h'), 2) as 占比百分比\n            FROM blocks\n            WHERE type = 'h'\n            GROUP BY subtype\n            ORDER BY 使用次数 DESC\n        ",
+        "expected_result": "返回各级标题的使用统计，了解文档结构层次"
+      }
+    },
+    "内容分析": {
+      "字数统计排行": {
+        "description": "按字数统计文档，找出最长和最短的文档",
+        "application": "识别内容丰富的重要文档和需要完善的简短文档",
+        "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                length as 字数,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks\n            WHERE type = 'd' AND length > 0\n            ORDER BY length DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回按字数排序的文档列表，包含文档链接便于快速访问"
+      },
+      "标签使用统计": {
+        "description": "统计所有标签的使用频率",
+        "application": "了解标签体系的使用情况，优化标签管理",
+        "sql": "\n            SELECT\n                content as 标签名称,\n                COUNT(*) as 使用次数,\n                COUNT(DISTINCT root_id) as 涉及文档数,\n                ROUND(COUNT(DISTINCT root_id) * 100.0 / (SELECT COUNT(DISTINCT root_id) FROM blocks WHERE type = 'd'), 2) as 文档覆盖率百分比\n            FROM spans\n            WHERE type = 'tag' OR type = 'textmark tag'\n            GROUP BY content\n            ORDER BY 使用次数 DESC\n            LIMIT 100\n        ",
+        "expected_result": "返回标签使用统计，包括使用次数和文档覆盖率"
+      },
+      "引用关系分析": {
+        "description": "分析文档间的引用关系，找出核心文档",
+        "application": "识别知识网络中的关键节点，了解文档重要性",
+        "sql": "\n            SELECT\n                b.content as 被引用文档,\n                b.hpath as 文档路径,\n                COUNT(r.id) as 被引用次数,\n                COUNT(DISTINCT r.root_id) as 引用来源文档数,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks b\n            JOIN refs r ON b.id = r.def_block_id\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 被引用次数 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回被引用最多的文档，体现文档在知识网络中的重要性"
+      },
+      "代码块统计分析": {
+        "description": "统计代码块的使用情况和编程语言分布",
+        "application": "了解技术文档的编程语言偏好和代码使用情况",
+        "sql": "\n            SELECT\n                CASE\n                    WHEN ial LIKE '%data-subtype=\"python\"%' THEN 'Python'\n                    WHEN ial LIKE '%data-subtype=\"javascript\"%' THEN 'JavaScript'\n                    WHEN ial LIKE '%data-subtype=\"sql\"%' THEN 'SQL'\n                    WHEN ial LIKE '%data-subtype=\"java\"%' THEN 'Java'\n                    WHEN ial LIKE '%data-subtype=\"cpp\"%' THEN 'C++'\n                    WHEN ial LIKE '%data-subtype=\"go\"%' THEN 'Go'\n                    WHEN ial LIKE '%data-subtype=\"rust\"%' THEN 'Rust'\n                    ELSE '其他/未指定'\n                END as 编程语言,\n                COUNT(*) as 代码块数量,\n                COUNT(DISTINCT root_id) as 涉及文档数,\n                AVG(length) as 平均代码长度\n            FROM blocks\n            WHERE type = 'c'\n            GROUP BY 编程语言\n            ORDER BY 代码块数量 DESC\n        ",
+        "expected_result": "返回各编程语言的代码块统计，了解技术栈使用情况"
+      }
+    },
+    "时间维度": {
+      "创建时间分布": {
+        "description": "按月份统计文档创建情况",
+        "application": "了解笔记创建的时间规律，分析写作习惯",
+        "sql": "\n            SELECT\n                strftime('%Y-%m', datetime(created/1000, 'unixepoch', 'localtime')) as 创建月份,\n                COUNT(*) as 文档数量,\n                SUM(length) as 总字数,\n                AVG(length) as 平均字数\n            FROM blocks\n            WHERE type = 'd'\n            GROUP BY 创建月份\n            ORDER BY 创建月份 DESC\n            LIMIT 24\n        ",
+        "expected_result": "返回按月份的文档创建统计，了解写作活跃度变化"
+      },
+      "最近活跃文档": {
+        "description": "查找最近更新的活跃文档",
+        "application": "快速找到正在编辑的文档，继续工作",
+        "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 更新时间,\n                ROUND((julianday('now') - julianday(datetime(updated/1000, 'unixepoch', 'localtime'))), 1) as 距今天数\n            FROM blocks\n            WHERE type = 'd'\n            ORDER BY updated DESC\n            LIMIT 30\n        ",
+        "expected_result": "返回最近更新的文档列表，便于继续编辑工作"
+      },
+      "长期未更新文档": {
+        "description": "查找长时间未更新的文档",
+        "application": "识别可能需要更新或归档的旧文档",
+        "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 最后更新时间,\n                ROUND((julianday('now') - julianday(datetime(updated/1000, 'unixepoch', 'localtime'))), 0) as 未更新天数\n            FROM blocks\n            WHERE type = 'd'\n            AND datetime(updated/1000, 'unixepoch', 'localtime') < datetime('now', '-90 days')\n            ORDER BY updated ASC\n            LIMIT 50\n        ",
+        "expected_result": "返回长期未更新的文档，帮助识别需要维护的内容"
+      },
+      "每日写作统计": {
+        "description": "按日期统计文档创建和更新情况",
+        "application": "分析每日写作习惯，制定写作计划",
+        "sql": "\n            SELECT\n                date(datetime(created/1000, 'unixepoch', 'localtime')) as 日期,\n                COUNT(*) as 创建文档数,\n                SUM(length) as 创建总字数,\n                COUNT(CASE WHEN date(datetime(created/1000, 'unixepoch', 'localtime')) =\n                           date(datetime(updated/1000, 'unixepoch', 'localtime')) THEN 1 END) as 当日完成文档数\n            FROM blocks\n            WHERE type = 'd'\n            AND datetime(created/1000, 'unixepoch', 'localtime') >= datetime('now', '-30 days')\n            GROUP BY 日期\n            ORDER BY 日期 DESC\n        ",
+        "expected_result": "返回最近30天的每日写作统计，了解写作规律"
+      }
+    },
+    "高级查询": {
+      "孤立文档检测": {
+        "description": "查找没有任何引用关系的孤立文档",
+        "application": "识别缺乏关联的文档，改善知识网络连接",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                b.length as 字数,\n                datetime(b.created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            WHERE b.type = 'd'\n            AND b.id NOT IN (SELECT DISTINCT def_block_root_id FROM refs WHERE def_block_root_id IS NOT NULL)\n            AND b.id NOT IN (SELECT DISTINCT root_id FROM refs WHERE root_id IS NOT NULL)\n            ORDER BY b.updated DESC\n            LIMIT 100\n        ",
+        "expected_result": "返回没有引用关系的孤立文档，便于建立知识连接"
+      },
+      "高价值文档识别": {
+        "description": "综合字数、引用数、标签数等指标识别高价值文档",
+        "application": "快速定位重要的核心文档，优先维护和完善",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                b.length as 字数,\n                COALESCE(ref_count.引用次数, 0) as 被引用次数,\n                COALESCE(tag_count.标签数量, 0) as 标签数量,\n                COALESCE(attr_count.属性数量, 0) as 自定义属性数量,\n                (b.length * 0.3 + COALESCE(ref_count.引用次数, 0) * 10 + COALESCE(tag_count.标签数量, 0) * 5) as 综合评分,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN (\n                SELECT def_block_root_id, COUNT(*) as 引用次数\n                FROM refs\n                GROUP BY def_block_root_id\n            ) ref_count ON b.id = ref_count.def_block_root_id\n            LEFT JOIN (\n                SELECT root_id, COUNT(*) as 标签数量\n                FROM spans\n                WHERE type = 'tag' OR type = 'textmark tag'\n                GROUP BY root_id\n            ) tag_count ON b.id = tag_count.root_id\n            LEFT JOIN (\n                SELECT root_id, COUNT(*) as 属性数量\n                FROM attributes\n                WHERE name LIKE 'custom-%'\n                GROUP BY root_id\n            ) attr_count ON b.id = attr_count.root_id\n            WHERE b.type = 'd'\n            ORDER BY 综合评分 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回按综合评分排序的高价值文档列表"
+      },
+      "标签共现分析": {
+        "description": "分析经常一起出现的标签组合",
+        "application": "了解标签使用模式，优化标签体系设计",
+        "sql": "\n            SELECT\n                s1.content as 标签1,\n                s2.content as 标签2,\n                COUNT(*) as 共现次数,\n                COUNT(DISTINCT s1.root_id) as 涉及文档数\n            FROM spans s1\n            JOIN spans s2 ON s1.root_id = s2.root_id AND s1.id < s2.id\n            WHERE (s1.type = 'tag' OR s1.type = 'textmark tag')\n            AND (s2.type = 'tag' OR s2.type = 'textmark tag')\n            AND s1.content != s2.content\n            GROUP BY s1.content, s2.content\n            HAVING 共现次数 >= 3\n            ORDER BY 共现次数 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回经常一起出现的标签组合，了解标签关联模式"
+      },
+      "引用网络深度分析": {
+        "description": "分析文档的引用深度和广度",
+        "application": "了解知识网络的复杂度和文档间的关联强度",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                COALESCE(outgoing.出链数量, 0) as 引用其他文档数,\n                COALESCE(incoming.入链数量, 0) as 被其他文档引用数,\n                COALESCE(outgoing.出链数量, 0) + COALESCE(incoming.入链数量, 0) as 总引用关系数,\n                CASE\n                    WHEN COALESCE(outgoing.出链数量, 0) > 10 AND COALESCE(incoming.入链数量, 0) > 5 THEN '核心枢纽'\n                    WHEN COALESCE(incoming.入链数量, 0) > 10 THEN '权威文档'\n                    WHEN COALESCE(outgoing.出链数量, 0) > 10 THEN '索引文档'\n                    ELSE '普通文档'\n                END as 文档类型,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN (\n                SELECT root_id, COUNT(DISTINCT def_block_root_id) as 出链数量\n                FROM refs\n                GROUP BY root_id\n            ) outgoing ON b.id = outgoing.root_id\n            LEFT JOIN (\n                SELECT def_block_root_id, COUNT(DISTINCT root_id) as 入链数量\n                FROM refs\n                GROUP BY def_block_root_id\n            ) incoming ON b.id = incoming.def_block_root_id\n            WHERE b.type = 'd'\n            AND (COALESCE(outgoing.出链数量, 0) > 0 OR COALESCE(incoming.入链数量, 0) > 0)\n            ORDER BY 总引用关系数 DESC\n            LIMIT 100\n        ",
+        "expected_result": "返回文档的引用网络分析，识别不同类型的文档角色"
+      },
+      "内容相似度分析": {
+        "description": "基于标签和引用找出内容相似的文档",
+        "application": "发现重复或相关内容，便于整合和去重",
+        "sql": "\n            SELECT\n                b1.content as 文档1,\n                b2.content as 文档2,\n                b1.hpath as 文档1路径,\n                b2.hpath as 文档2路径,\n                '[' || b1.content || '](siyuan://blocks/' || b1.id || ')' as 文档1链接,\n                '[' || b2.content || '](siyuan://blocks/' || b2.id || ')' as 文档2链接,\n                COUNT(*) as 共同标签数,\n                datetime(b1.updated/1000, 'unixepoch', 'localtime') as 文档1更新时间,\n                datetime(b2.updated/1000, 'unixepoch', 'localtime') as 文档2更新时间\n            FROM blocks b1\n            JOIN spans s1 ON b1.id = s1.root_id\n            JOIN spans s2 ON s1.content = s2.content\n            JOIN blocks b2 ON s2.root_id = b2.id\n            WHERE b1.type = 'd' AND b2.type = 'd'\n            AND b1.id < b2.id\n            AND (s1.type = 'tag' OR s1.type = 'textmark tag')\n            AND (s2.type = 'tag' OR s2.type = 'textmark tag')\n            GROUP BY b1.id, b2.id\n            HAVING 共同标签数 >= 3\n            ORDER BY 共同标签数 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回具有相似标签的文档对，便于发现相关内容"
+      }
+    },
+    "特殊用途": {
+      "图片资源统计": {
+        "description": "统计文档中的图片使用情况",
+        "application": "了解图片资源分布，管理媒体文件",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(s.id) as 图片数量,\n                GROUP_CONCAT(SUBSTR(s.markdown, 1, 50), '; ') as 图片列表预览,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            JOIN spans s ON b.id = s.root_id\n            WHERE s.type = 'img' AND b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 图片数量 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回包含图片最多的文档列表，便于媒体资源管理"
+      },
+      "数学公式使用统计": {
+        "description": "统计数学公式块和行内公式的使用情况",
+        "application": "了解数学内容的分布，适用于学术和技术文档",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(CASE WHEN blocks.type = 'm' THEN 1 END) as 数学公式块数量,\n                COUNT(CASE WHEN s.type = 'textmark inline-math' THEN 1 END) as 行内公式数量,\n                COUNT(CASE WHEN blocks.type = 'm' THEN 1 END) +\n                COUNT(CASE WHEN s.type = 'textmark inline-math' THEN 1 END) as 总公式数量,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN blocks ON b.id = blocks.root_id AND blocks.type = 'm'\n            LEFT JOIN spans s ON b.id = s.root_id AND s.type = 'textmark inline-math'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            HAVING 总公式数量 > 0\n            ORDER BY 总公式数量 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回包含数学公式的文档统计，便于学术内容管理"
+      },
+      "任务列表统计": {
+        "description": "统计任务列表的完成情况",
+        "application": "跟踪待办事项和任务完成进度",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%' THEN 1 END) as 总任务数,\n                COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%'\n                           AND blocks.ial NOT LIKE '%data-task=\"false\"%' THEN 1 END) as 已完成任务数,\n                ROUND(\n                    COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%'\n                               AND blocks.ial NOT LIKE '%data-task=\"false\"%' THEN 1 END) * 100.0 /\n                    NULLIF(COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%' THEN 1 END), 0),\n                    2\n                ) as 完成率百分比,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN blocks ON b.id = blocks.root_id AND blocks.type = 'i' AND blocks.subtype = 't'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            HAVING 总任务数 > 0\n            ORDER BY 总任务数 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回包含任务列表的文档及其完成情况统计"
+      },
+      "表格使用统计": {
+        "description": "统计文档中表格的使用情况",
+        "application": "了解结构化数据的使用情况，便于数据管理",
+        "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(blocks.id) as 表格数量,\n                AVG(blocks.length) as 平均表格大小,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            JOIN blocks ON b.id = blocks.root_id AND blocks.type = 't'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 表格数量 DESC\n            LIMIT 50\n        ",
+        "expected_result": "返回包含表格最多的文档列表，便于结构化数据管理"
+      },
+      "自定义属性分布": {
+        "description": "统计各种自定义属性的使用情况",
+        "application": "了解自定义属性体系的使用分布，优化属性管理",
+        "sql": "\n            SELECT\n                REPLACE(a.name, 'custom-', '') as 自定义属性名,\n                COUNT(*) as 使用次数,\n                COUNT(DISTINCT a.root_id) as 涉及文档数,\n                COUNT(DISTINCT a.value) as 不同值数量,\n                GROUP_CONCAT(DISTINCT a.value LIMIT 10) as 值示例\n            FROM attributes a\n            WHERE a.name LIKE 'custom-%'\n            GROUP BY a.name\n            ORDER BY 使用次数 DESC\n        ",
+        "expected_result": "返回自定义属性的使用统计，了解属性体系分布"
+      }
+    }
+  },
+  "all_queries": {
+    "文档总体统计": {
+      "description": "统计所有文档的基本信息，包括数量、平均字数等",
+      "application": "了解笔记库的整体规模和内容分布",
+      "sql": "\n            SELECT\n                COUNT(*) as 文档总数,\n                AVG(length) as 平均字数,\n                MAX(length) as 最长文档字数,\n                MIN(length) as 最短文档字数,\n                COUNT(DISTINCT box) as 笔记本数量,\n                datetime(MIN(created)/1000, 'unixepoch', 'localtime') as 最早创建时间,\n                datetime(MAX(updated)/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks\n            WHERE type = 'd'\n        ",
+      "expected_result": "返回文档总数、平均字数、笔记本数量等基础统计信息"
+    },
+    "块类型分布统计": {
+      "description": "统计各种块类型的数量分布",
+      "application": "了解笔记内容的结构特点，如标题、段落、列表等的使用情况",
+      "sql": "\n            SELECT\n                type as 块类型,\n                CASE\n                    WHEN type = 'd' THEN '文档块'\n                    WHEN type = 'h' THEN '标题块'\n                    WHEN type = 'p' THEN '段落块'\n                    WHEN type = 'l' THEN '列表块'\n                    WHEN type = 'i' THEN '列表项块'\n                    WHEN type = 'c' THEN '代码块'\n                    WHEN type = 't' THEN '表格块'\n                    WHEN type = 'b' THEN '引述块'\n                    WHEN type = 's' THEN '超级块'\n                    WHEN type = 'm' THEN '数学公式块'\n                    ELSE '其他'\n                END as 块类型说明,\n                COUNT(*) as 数量,\n                ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM blocks), 2) as 占比百分比\n            FROM blocks\n            GROUP BY type\n            ORDER BY 数量 DESC\n        ",
+      "expected_result": "返回各种块类型的数量和占比，帮助了解笔记结构特点"
+    },
+    "笔记本统计排行": {
+      "description": "统计各笔记本的文档数量、总字数等信息",
+      "application": "了解各笔记本的使用情况，识别最活跃的笔记本",
+      "sql": "\n            SELECT\n                box as 笔记本ID,\n                COUNT(*) as 文档数量,\n                SUM(length) as 总字数,\n                AVG(length) as 平均字数,\n                datetime(MIN(created)/1000, 'unixepoch', 'localtime') as 最早文档创建时间,\n                datetime(MAX(updated)/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks\n            WHERE type = 'd'\n            GROUP BY box\n            ORDER BY 文档数量 DESC\n            LIMIT 20\n        ",
+      "expected_result": "返回各笔记本的文档统计信息，按文档数量排序"
+    },
+    "标题层级分布": {
+      "description": "统计各级标题的使用情况",
+      "application": "了解文档结构的层次性，优化文档组织方式",
+      "sql": "\n            SELECT\n                subtype as 标题级别,\n                CASE\n                    WHEN subtype = 'h1' THEN '一级标题'\n                    WHEN subtype = 'h2' THEN '二级标题'\n                    WHEN subtype = 'h3' THEN '三级标题'\n                    WHEN subtype = 'h4' THEN '四级标题'\n                    WHEN subtype = 'h5' THEN '五级标题'\n                    WHEN subtype = 'h6' THEN '六级标题'\n                    ELSE '其他'\n                END as 标题类型,\n                COUNT(*) as 使用次数,\n                ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM blocks WHERE type = 'h'), 2) as 占比百分比\n            FROM blocks\n            WHERE type = 'h'\n            GROUP BY subtype\n            ORDER BY 使用次数 DESC\n        ",
+      "expected_result": "返回各级标题的使用统计，了解文档结构层次"
+    },
+    "字数统计排行": {
+      "description": "按字数统计文档，找出最长和最短的文档",
+      "application": "识别内容丰富的重要文档和需要完善的简短文档",
+      "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                length as 字数,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks\n            WHERE type = 'd' AND length > 0\n            ORDER BY length DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回按字数排序的文档列表，包含文档链接便于快速访问"
+    },
+    "标签使用统计": {
+      "description": "统计所有标签的使用频率",
+      "application": "了解标签体系的使用情况，优化标签管理",
+      "sql": "\n            SELECT\n                content as 标签名称,\n                COUNT(*) as 使用次数,\n                COUNT(DISTINCT root_id) as 涉及文档数,\n                ROUND(COUNT(DISTINCT root_id) * 100.0 / (SELECT COUNT(DISTINCT root_id) FROM blocks WHERE type = 'd'), 2) as 文档覆盖率百分比\n            FROM spans\n            WHERE type = 'tag' OR type = 'textmark tag'\n            GROUP BY content\n            ORDER BY 使用次数 DESC\n            LIMIT 100\n        ",
+      "expected_result": "返回标签使用统计，包括使用次数和文档覆盖率"
+    },
+    "引用关系分析": {
+      "description": "分析文档间的引用关系，找出核心文档",
+      "application": "识别知识网络中的关键节点，了解文档重要性",
+      "sql": "\n            SELECT\n                b.content as 被引用文档,\n                b.hpath as 文档路径,\n                COUNT(r.id) as 被引用次数,\n                COUNT(DISTINCT r.root_id) as 引用来源文档数,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 最近更新时间\n            FROM blocks b\n            JOIN refs r ON b.id = r.def_block_id\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 被引用次数 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回被引用最多的文档，体现文档在知识网络中的重要性"
+    },
+    "代码块统计分析": {
+      "description": "统计代码块的使用情况和编程语言分布",
+      "application": "了解技术文档的编程语言偏好和代码使用情况",
+      "sql": "\n            SELECT\n                CASE\n                    WHEN ial LIKE '%data-subtype=\"python\"%' THEN 'Python'\n                    WHEN ial LIKE '%data-subtype=\"javascript\"%' THEN 'JavaScript'\n                    WHEN ial LIKE '%data-subtype=\"sql\"%' THEN 'SQL'\n                    WHEN ial LIKE '%data-subtype=\"java\"%' THEN 'Java'\n                    WHEN ial LIKE '%data-subtype=\"cpp\"%' THEN 'C++'\n                    WHEN ial LIKE '%data-subtype=\"go\"%' THEN 'Go'\n                    WHEN ial LIKE '%data-subtype=\"rust\"%' THEN 'Rust'\n                    ELSE '其他/未指定'\n                END as 编程语言,\n                COUNT(*) as 代码块数量,\n                COUNT(DISTINCT root_id) as 涉及文档数,\n                AVG(length) as 平均代码长度\n            FROM blocks\n            WHERE type = 'c'\n            GROUP BY 编程语言\n            ORDER BY 代码块数量 DESC\n        ",
+      "expected_result": "返回各编程语言的代码块统计，了解技术栈使用情况"
+    },
+    "创建时间分布": {
+      "description": "按月份统计文档创建情况",
+      "application": "了解笔记创建的时间规律，分析写作习惯",
+      "sql": "\n            SELECT\n                strftime('%Y-%m', datetime(created/1000, 'unixepoch', 'localtime')) as 创建月份,\n                COUNT(*) as 文档数量,\n                SUM(length) as 总字数,\n                AVG(length) as 平均字数\n            FROM blocks\n            WHERE type = 'd'\n            GROUP BY 创建月份\n            ORDER BY 创建月份 DESC\n            LIMIT 24\n        ",
+      "expected_result": "返回按月份的文档创建统计，了解写作活跃度变化"
+    },
+    "最近活跃文档": {
+      "description": "查找最近更新的活跃文档",
+      "application": "快速找到正在编辑的文档，继续工作",
+      "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 更新时间,\n                ROUND((julianday('now') - julianday(datetime(updated/1000, 'unixepoch', 'localtime'))), 1) as 距今天数\n            FROM blocks\n            WHERE type = 'd'\n            ORDER BY updated DESC\n            LIMIT 30\n        ",
+      "expected_result": "返回最近更新的文档列表，便于继续编辑工作"
+    },
+    "长期未更新文档": {
+      "description": "查找长时间未更新的文档",
+      "application": "识别可能需要更新或归档的旧文档",
+      "sql": "\n            SELECT\n                content as 文档标题,\n                hpath as 文档路径,\n                '[' || content || '](siyuan://blocks/' || id || ')' as 文档链接,\n                datetime(created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(updated/1000, 'unixepoch', 'localtime') as 最后更新时间,\n                ROUND((julianday('now') - julianday(datetime(updated/1000, 'unixepoch', 'localtime'))), 0) as 未更新天数\n            FROM blocks\n            WHERE type = 'd'\n            AND datetime(updated/1000, 'unixepoch', 'localtime') < datetime('now', '-90 days')\n            ORDER BY updated ASC\n            LIMIT 50\n        ",
+      "expected_result": "返回长期未更新的文档，帮助识别需要维护的内容"
+    },
+    "每日写作统计": {
+      "description": "按日期统计文档创建和更新情况",
+      "application": "分析每日写作习惯，制定写作计划",
+      "sql": "\n            SELECT\n                date(datetime(created/1000, 'unixepoch', 'localtime')) as 日期,\n                COUNT(*) as 创建文档数,\n                SUM(length) as 创建总字数,\n                COUNT(CASE WHEN date(datetime(created/1000, 'unixepoch', 'localtime')) =\n                           date(datetime(updated/1000, 'unixepoch', 'localtime')) THEN 1 END) as 当日完成文档数\n            FROM blocks\n            WHERE type = 'd'\n            AND datetime(created/1000, 'unixepoch', 'localtime') >= datetime('now', '-30 days')\n            GROUP BY 日期\n            ORDER BY 日期 DESC\n        ",
+      "expected_result": "返回最近30天的每日写作统计，了解写作规律"
+    },
+    "孤立文档检测": {
+      "description": "查找没有任何引用关系的孤立文档",
+      "application": "识别缺乏关联的文档，改善知识网络连接",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                b.length as 字数,\n                datetime(b.created/1000, 'unixepoch', 'localtime') as 创建时间,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            WHERE b.type = 'd'\n            AND b.id NOT IN (SELECT DISTINCT def_block_root_id FROM refs WHERE def_block_root_id IS NOT NULL)\n            AND b.id NOT IN (SELECT DISTINCT root_id FROM refs WHERE root_id IS NOT NULL)\n            ORDER BY b.updated DESC\n            LIMIT 100\n        ",
+      "expected_result": "返回没有引用关系的孤立文档，便于建立知识连接"
+    },
+    "高价值文档识别": {
+      "description": "综合字数、引用数、标签数等指标识别高价值文档",
+      "application": "快速定位重要的核心文档，优先维护和完善",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                b.length as 字数,\n                COALESCE(ref_count.引用次数, 0) as 被引用次数,\n                COALESCE(tag_count.标签数量, 0) as 标签数量,\n                COALESCE(attr_count.属性数量, 0) as 自定义属性数量,\n                (b.length * 0.3 + COALESCE(ref_count.引用次数, 0) * 10 + COALESCE(tag_count.标签数量, 0) * 5) as 综合评分,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN (\n                SELECT def_block_root_id, COUNT(*) as 引用次数\n                FROM refs\n                GROUP BY def_block_root_id\n            ) ref_count ON b.id = ref_count.def_block_root_id\n            LEFT JOIN (\n                SELECT root_id, COUNT(*) as 标签数量\n                FROM spans\n                WHERE type = 'tag' OR type = 'textmark tag'\n                GROUP BY root_id\n            ) tag_count ON b.id = tag_count.root_id\n            LEFT JOIN (\n                SELECT root_id, COUNT(*) as 属性数量\n                FROM attributes\n                WHERE name LIKE 'custom-%'\n                GROUP BY root_id\n            ) attr_count ON b.id = attr_count.root_id\n            WHERE b.type = 'd'\n            ORDER BY 综合评分 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回按综合评分排序的高价值文档列表"
+    },
+    "标签共现分析": {
+      "description": "分析经常一起出现的标签组合",
+      "application": "了解标签使用模式，优化标签体系设计",
+      "sql": "\n            SELECT\n                s1.content as 标签1,\n                s2.content as 标签2,\n                COUNT(*) as 共现次数,\n                COUNT(DISTINCT s1.root_id) as 涉及文档数\n            FROM spans s1\n            JOIN spans s2 ON s1.root_id = s2.root_id AND s1.id < s2.id\n            WHERE (s1.type = 'tag' OR s1.type = 'textmark tag')\n            AND (s2.type = 'tag' OR s2.type = 'textmark tag')\n            AND s1.content != s2.content\n            GROUP BY s1.content, s2.content\n            HAVING 共现次数 >= 3\n            ORDER BY 共现次数 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回经常一起出现的标签组合，了解标签关联模式"
+    },
+    "引用网络深度分析": {
+      "description": "分析文档的引用深度和广度",
+      "application": "了解知识网络的复杂度和文档间的关联强度",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                COALESCE(outgoing.出链数量, 0) as 引用其他文档数,\n                COALESCE(incoming.入链数量, 0) as 被其他文档引用数,\n                COALESCE(outgoing.出链数量, 0) + COALESCE(incoming.入链数量, 0) as 总引用关系数,\n                CASE\n                    WHEN COALESCE(outgoing.出链数量, 0) > 10 AND COALESCE(incoming.入链数量, 0) > 5 THEN '核心枢纽'\n                    WHEN COALESCE(incoming.入链数量, 0) > 10 THEN '权威文档'\n                    WHEN COALESCE(outgoing.出链数量, 0) > 10 THEN '索引文档'\n                    ELSE '普通文档'\n                END as 文档类型,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN (\n                SELECT root_id, COUNT(DISTINCT def_block_root_id) as 出链数量\n                FROM refs\n                GROUP BY root_id\n            ) outgoing ON b.id = outgoing.root_id\n            LEFT JOIN (\n                SELECT def_block_root_id, COUNT(DISTINCT root_id) as 入链数量\n                FROM refs\n                GROUP BY def_block_root_id\n            ) incoming ON b.id = incoming.def_block_root_id\n            WHERE b.type = 'd'\n            AND (COALESCE(outgoing.出链数量, 0) > 0 OR COALESCE(incoming.入链数量, 0) > 0)\n            ORDER BY 总引用关系数 DESC\n            LIMIT 100\n        ",
+      "expected_result": "返回文档的引用网络分析，识别不同类型的文档角色"
+    },
+    "内容相似度分析": {
+      "description": "基于标签和引用找出内容相似的文档",
+      "application": "发现重复或相关内容，便于整合和去重",
+      "sql": "\n            SELECT\n                b1.content as 文档1,\n                b2.content as 文档2,\n                b1.hpath as 文档1路径,\n                b2.hpath as 文档2路径,\n                '[' || b1.content || '](siyuan://blocks/' || b1.id || ')' as 文档1链接,\n                '[' || b2.content || '](siyuan://blocks/' || b2.id || ')' as 文档2链接,\n                COUNT(*) as 共同标签数,\n                datetime(b1.updated/1000, 'unixepoch', 'localtime') as 文档1更新时间,\n                datetime(b2.updated/1000, 'unixepoch', 'localtime') as 文档2更新时间\n            FROM blocks b1\n            JOIN spans s1 ON b1.id = s1.root_id\n            JOIN spans s2 ON s1.content = s2.content\n            JOIN blocks b2 ON s2.root_id = b2.id\n            WHERE b1.type = 'd' AND b2.type = 'd'\n            AND b1.id < b2.id\n            AND (s1.type = 'tag' OR s1.type = 'textmark tag')\n            AND (s2.type = 'tag' OR s2.type = 'textmark tag')\n            GROUP BY b1.id, b2.id\n            HAVING 共同标签数 >= 3\n            ORDER BY 共同标签数 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回具有相似标签的文档对，便于发现相关内容"
+    },
+    "图片资源统计": {
+      "description": "统计文档中的图片使用情况",
+      "application": "了解图片资源分布，管理媒体文件",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(s.id) as 图片数量,\n                GROUP_CONCAT(SUBSTR(s.markdown, 1, 50), '; ') as 图片列表预览,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            JOIN spans s ON b.id = s.root_id\n            WHERE s.type = 'img' AND b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 图片数量 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回包含图片最多的文档列表，便于媒体资源管理"
+    },
+    "数学公式使用统计": {
+      "description": "统计数学公式块和行内公式的使用情况",
+      "application": "了解数学内容的分布，适用于学术和技术文档",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(CASE WHEN blocks.type = 'm' THEN 1 END) as 数学公式块数量,\n                COUNT(CASE WHEN s.type = 'textmark inline-math' THEN 1 END) as 行内公式数量,\n                COUNT(CASE WHEN blocks.type = 'm' THEN 1 END) +\n                COUNT(CASE WHEN s.type = 'textmark inline-math' THEN 1 END) as 总公式数量,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN blocks ON b.id = blocks.root_id AND blocks.type = 'm'\n            LEFT JOIN spans s ON b.id = s.root_id AND s.type = 'textmark inline-math'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            HAVING 总公式数量 > 0\n            ORDER BY 总公式数量 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回包含数学公式的文档统计，便于学术内容管理"
+    },
+    "任务列表统计": {
+      "description": "统计任务列表的完成情况",
+      "application": "跟踪待办事项和任务完成进度",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%' THEN 1 END) as 总任务数,\n                COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%'\n                           AND blocks.ial NOT LIKE '%data-task=\"false\"%' THEN 1 END) as 已完成任务数,\n                ROUND(\n                    COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%'\n                               AND blocks.ial NOT LIKE '%data-task=\"false\"%' THEN 1 END) * 100.0 /\n                    NULLIF(COUNT(CASE WHEN blocks.subtype = 't' AND blocks.ial LIKE '%data-task=\"true\"%' THEN 1 END), 0),\n                    2\n                ) as 完成率百分比,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            LEFT JOIN blocks ON b.id = blocks.root_id AND blocks.type = 'i' AND blocks.subtype = 't'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            HAVING 总任务数 > 0\n            ORDER BY 总任务数 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回包含任务列表的文档及其完成情况统计"
+    },
+    "表格使用统计": {
+      "description": "统计文档中表格的使用情况",
+      "application": "了解结构化数据的使用情况，便于数据管理",
+      "sql": "\n            SELECT\n                b.content as 文档标题,\n                b.hpath as 文档路径,\n                COUNT(blocks.id) as 表格数量,\n                AVG(blocks.length) as 平均表格大小,\n                '[' || b.content || '](siyuan://blocks/' || b.id || ')' as 文档链接,\n                datetime(b.updated/1000, 'unixepoch', 'localtime') as 更新时间\n            FROM blocks b\n            JOIN blocks ON b.id = blocks.root_id AND blocks.type = 't'\n            WHERE b.type = 'd'\n            GROUP BY b.id\n            ORDER BY 表格数量 DESC\n            LIMIT 50\n        ",
+      "expected_result": "返回包含表格最多的文档列表，便于结构化数据管理"
+    },
+    "自定义属性分布": {
+      "description": "统计各种自定义属性的使用情况",
+      "application": "了解自定义属性体系的使用分布，优化属性管理",
+      "sql": "\n            SELECT\n                REPLACE(a.name, 'custom-', '') as 自定义属性名,\n                COUNT(*) as 使用次数,\n                COUNT(DISTINCT a.root_id) as 涉及文档数,\n                COUNT(DISTINCT a.value) as 不同值数量,\n                GROUP_CONCAT(DISTINCT a.value LIMIT 10) as 值示例\n            FROM attributes a\n            WHERE a.name LIKE 'custom-%'\n            GROUP BY a.name\n            ORDER BY 使用次数 DESC\n        ",
+      "expected_result": "返回自定义属性的使用统计，了解属性体系分布"
+    }
+  },
+  "parameterized_functions": {
+    "get_documents_by_tag": "根据标签查询文档",
+    "get_documents_by_custom_attribute": "根据自定义属性查询文档",
+    "get_documents_by_date_range": "根据日期范围查询文档"
+  }
+}
