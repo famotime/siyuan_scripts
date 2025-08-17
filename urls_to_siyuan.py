@@ -24,8 +24,14 @@ import create_notes_from_md
 # 导入日志模块和转换器
 from utilities import setup_logging, URLToMarkdownConverter
 
+# 导入配置模块
+from config import get_config, get_urls_path
+
+# 获取配置
+config = get_config()
+
 # markdown文件导出目录
-DEFAULT_MD_FOLDER = "H:/为知笔记导出MD备份/urls_to_markdown"
+DEFAULT_MD_FOLDER = str(get_urls_path())
 # 默认转换方式, 可选: markdownify, html2text, builtin, all; all 表示使用所有三种方式各生成一份，文件名添加后缀区分
 DEFAULT_CONVERTER_LIB = "markdownify"
 

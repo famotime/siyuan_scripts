@@ -23,10 +23,16 @@ from utilities import (
 # 配置日志
 logger = setup_logging()
 
+# 导入配置模块
+from config import get_config, get_wiznotes_path
+
+# 获取配置
+config = get_config()
+
 # 默认配置
-DEFAULT_MD_FOLDER = Path("H:/为知笔记导出MD备份/My Emails")
-DEFAULT_NOTEBOOK_NAME = "剪藏笔记本"
-DEFAULT_PARENT_FOLDER = "/Web收集箱/urls2markdown"
+DEFAULT_MD_FOLDER = get_wiznotes_path()
+DEFAULT_NOTEBOOK_NAME = config.siyuan["default_notebook"]
+DEFAULT_PARENT_FOLDER = config.siyuan["default_parent_folder"]
 
 
 def test_connection(api_client):

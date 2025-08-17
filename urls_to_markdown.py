@@ -17,7 +17,10 @@ async def main():
     """
     主函数 - 从剪贴板读取URL并转换为Markdown
     """
-    converter = URLToMarkdownConverter(output_dir="H:/为知笔记导出MD备份/urls_to_markdown")
+    # 导入配置模块
+    from config import get_urls_path
+    
+    converter = URLToMarkdownConverter(output_dir=str(get_urls_path()))
 
     if not converter.is_clipboard_available():
         print("❌ 错误: pyperclip库未安装")

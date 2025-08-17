@@ -51,12 +51,16 @@ def main(default_folders):
     load_dotenv()
 
     # ========== 配置参数 ==========
-    # 基础配置
-    export_dir = Path("H:/为知笔记导出MD备份")
+    # 导入配置模块
+    from config import get_config, get_wiznotes_path
+    
+    # 获取配置
+    config = get_config()
+    export_dir = get_wiznotes_path().parent  # 获取为知笔记导出目录的父目录
     max_notes = None  # 不限制笔记数量，自动处理超过1000条笔记的情况（通过双向查询和去重）
 
     # 性能配置
-    max_workers = 3  # 配置并行下载的线程数
+    max_workers = config.wiznotes["max_workers"]  # 配置并行下载的线程数
 
     try:
         # 设置日志

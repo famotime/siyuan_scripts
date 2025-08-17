@@ -17,10 +17,12 @@ import create_notes_from_md
 # 导入日志模块
 from utilities import setup_logging
 
-# 配置参数
-DEFAULT_MD_FOLDER = "H:/为知笔记导出MD备份/My Emails"
-# 默认导出"My Emails"文件夹
-default_folders = ["/My Emails/"]
+# 导入配置模块
+from config import get_config, get_wiznotes_path
+
+# 获取配置
+config = get_config()
+default_folders = config.wiznotes["default_folders"]
 
 
 def step1_export_wiz_notes(default_folders):
@@ -70,7 +72,7 @@ def step3_move_files():
     logger.info("\n=== 步骤3：移动已导入笔记到\"已转思源\"目录 ===")
 
     # 获取MD文件夹路径
-    md_folder = os.getenv("MD_FOLDER", DEFAULT_MD_FOLDER)
+    md_folder = os.getenv("MD_FOLDER", str(get_wiznotes_path()))
     md_path = Path(md_folder)
 
     if not md_path.exists():
