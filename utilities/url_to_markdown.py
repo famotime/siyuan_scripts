@@ -14,6 +14,7 @@ from .web_downloader import WebDownloader
 from .html_converter import HTMLConverter
 from .media_downloader import MediaDownloader
 from .clipboard_manager import ClipboardManager
+from .special_site_handler import SpecialSiteHandler
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class URLToMarkdownConverter:
         self.html_converter = HTMLConverter(converter_lib)
         self.media_downloader = MediaDownloader(self.output_dir)
         self.clipboard_manager = ClipboardManager()
+        self.special_site_handler = SpecialSiteHandler()
 
     def generate_filename(self, title: str, url: str) -> str:
         """
@@ -145,13 +147,39 @@ class URLToMarkdownConverter:
         :return: 输出文件路径，失败时返回None
         """
         try:
-            # 获取网页内容
-            html_content = self.web_downloader.fetch_webpage(url)
-            if not html_content:
-                return None
+            # 检查是否需要特殊处理
+            if self.special_site_handler.can_handle(url):
+                logger.info(f"使用特殊处理器处理: {url}")
+                special_result = self.special_site_handler.get_content(url)
 
-            # 提取页面信息
-            page_info = self.web_downloader.extract_page_info(html_content)
+                if special_result:
+                    html_content = special_result['html_content']
+                    page_info = {
+                        'title': special_result['title'],
+                        'description': special_result['description'],
+                        'author': special_result['author'],
+                        'publish_time': special_result['publish_time']
+                    }
+                else:
+                    logger.warning("特殊处理器处理失败，回退到普通方式")
+                    html_content = self.web_downloader.fetch_webpage(url)
+                    if not html_content:
+                        return None
+                    page_info = self.web_downloader.extract_page_info(html_content)
+            else:
+                # 获取网页内容
+                html_content = self.web_downloader.fetch_webpage(url)
+                if not html_content:
+                    return None
+
+                # 提取页面信息
+                page_info = self.web_downloader.extract_page_info(html_content)
+
+                # 检查是否是JavaScript重定向页面
+                if self.web_downloader._is_js_redirect_page(html_content):
+                    logger.warning(f"检测到JavaScript重定向页面，建议安装selenium处理: {url}")
+                    logger.info(self.special_site_handler.get_installation_guide())
+
             # logger.info(f"页面标题: {page_info['title']}")
 
             # 下载媒体文件

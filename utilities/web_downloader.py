@@ -7,6 +7,8 @@ import requests
 import logging
 import re
 import html
+import gzip
+import zlib
 from typing import Optional, Dict
 from urllib.parse import urlparse
 
@@ -15,6 +17,18 @@ try:
     HAS_BS4 = True
 except ImportError:
     HAS_BS4 = False
+
+try:
+    import brotli
+    HAS_BROTLI = True
+except ImportError:
+    HAS_BROTLI = False
+
+try:
+    import chardet
+    HAS_CHARDET = True
+except ImportError:
+    HAS_CHARDET = False
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +40,94 @@ class WebDownloader:
         """初始化网页下载器"""
         # 请求头设置
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
         }
+
+        # 针对特定网站的特殊请求头
+        self.site_specific_headers = {
+            'toutiao.com': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
+            }
+        }
+
+    def _get_site_specific_headers(self, url: str) -> Dict[str, str]:
+        """获取针对特定网站的请求头"""
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.lower()
+
+        # 检查是否有针对该域名的特殊请求头
+        for site_pattern, headers in self.site_specific_headers.items():
+            if site_pattern in domain:
+                return {**self.headers, **headers}
+
+        return self.headers
+
+    def _decompress_content(self, content: bytes, encoding: str) -> bytes:
+        """解压缩内容"""
+        try:
+            if encoding == 'gzip':
+                return gzip.decompress(content)
+            elif encoding == 'deflate':
+                return zlib.decompress(content)
+            elif encoding == 'br' and HAS_BROTLI:
+                return brotli.decompress(content)
+            else:
+                return content
+        except Exception as e:
+            logger.warning(f"解压缩失败 ({encoding}): {e}")
+            return content
+
+    def _detect_encoding(self, content: bytes, response_encoding: str = None) -> str:
+        """检测内容编码"""
+        # 首先尝试响应头中的编码
+        if response_encoding and response_encoding.lower() not in ['iso-8859-1', 'ascii']:
+            return response_encoding
+
+        # 使用chardet检测
+        if HAS_CHARDET:
+            detected = chardet.detect(content)
+            if detected['encoding'] and detected['confidence'] > 0.7:
+                return detected['encoding']
+
+        # 尝试从HTML meta标签中提取编码
+        try:
+            content_str = content.decode('utf-8', errors='ignore')
+            charset_match = re.search(r'<meta[^>]*charset[="\s]*([^">\s]+)', content_str, re.IGNORECASE)
+            if charset_match:
+                return charset_match.group(1)
+        except:
+            pass
+
+        # 按优先级尝试常见编码
+        encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5', 'latin-1']
+        for encoding in encodings:
+            try:
+                content.decode(encoding)
+                return encoding
+            except UnicodeDecodeError:
+                continue
+
+        return 'utf-8'  # 默认使用UTF-8
 
     def fetch_webpage(self, url: str) -> Optional[str]:
         """
@@ -42,31 +137,67 @@ class WebDownloader:
         :return: 网页HTML内容，失败时返回None
         """
         try:
-            # logger.info(f"正在获取网页内容: {url}")
+            # 获取针对特定网站的请求头
+            headers = self._get_site_specific_headers(url)
 
-            response = requests.get(url, headers=self.headers, timeout=30)
+            # logger.info(f"正在获取网页内容: {url}")
+            response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
 
-            # 尝试检测编码
-            if response.encoding == 'ISO-8859-1' or response.encoding is None:
-                encodings = ['utf-8', 'gbk', 'gb2312', 'latin-1']
-                for encoding in encodings:
-                    try:
-                        response.encoding = encoding
-                        content = response.text
-                        content.encode('utf-8')
-                        break
-                    except (UnicodeDecodeError, UnicodeEncodeError):
-                        continue
-                else:
-                    response.encoding = 'utf-8'
+            # 获取原始内容
+            raw_content = response.content
 
-            # logger.info(f"成功获取网页内容，大小: {len(response.text)} 字符")
-            return response.text
+            # 处理压缩内容
+            content_encoding = response.headers.get('Content-Encoding', '').lower()
+            if content_encoding:
+                raw_content = self._decompress_content(raw_content, content_encoding)
+
+            # 检测编码
+            detected_encoding = self._detect_encoding(raw_content, response.encoding)
+
+            # 解码内容
+            try:
+                content = raw_content.decode(detected_encoding)
+            except UnicodeDecodeError:
+                # 如果检测的编码失败，尝试UTF-8
+                try:
+                    content = raw_content.decode('utf-8', errors='replace')
+                except:
+                    content = raw_content.decode('latin-1')
+
+            # 检查是否是JavaScript重定向页面（如今日头条）
+            if self._is_js_redirect_page(content):
+                logger.warning(f"检测到JavaScript重定向页面: {url}")
+                # 可以在这里添加特殊处理逻辑
+
+            # logger.info(f"成功获取网页内容，大小: {len(content)} 字符")
+            return content
 
         except requests.exceptions.RequestException as e:
             logger.error(f"获取网页失败: {e}")
             return None
+
+    def _is_js_redirect_page(self, content: str) -> bool:
+        """检测是否是JavaScript重定向页面"""
+        # 检查内容长度和特征
+        if len(content) < 1000:
+            return False
+
+        # 检查是否主要包含JavaScript代码而缺少实际内容
+        js_indicators = [
+            'window._$jsvmprt',
+            'var glb;',
+            'function(b,e,f)',
+            'typeof window?global:window'
+        ]
+
+        js_count = sum(1 for indicator in js_indicators if indicator in content)
+
+        # 检查是否缺少实际的HTML内容结构
+        html_indicators = ['<article', '<main', '<div class="content', '<p>']
+        html_count = sum(1 for indicator in html_indicators if indicator in content)
+
+        return js_count >= 2 and html_count == 0
 
     def extract_page_info(self, html_content: str) -> Dict[str, str]:
         """

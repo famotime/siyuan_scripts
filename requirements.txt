@@ -12,3 +12,5 @@ aiofiles
 qiniu
 pyperclip
 yagmail
+brotli
+chardet

@@ -35,7 +35,7 @@ class CustomMarkdownConverter(markdownify.MarkdownConverter):
     """
     自定义MarkdownConverter，将div标签转换为换行
     """
-    def convert_div(self, el, text, convert_as_inline):
+    def convert_div(self, el, text, convert_as_inline=False, **kwargs):
         """将div标签转换为换行"""
         # 检查div是否只包含空白内容、br标签或HTML实体
         if not text.strip():
