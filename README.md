@@ -15,6 +15,9 @@
 - **URL转思源**: `urls_to_siyuan.py` - 完整流程：剪贴板URL -> Markdown -> 思源笔记。
 - **剪贴板笔记处理**: `clipboard_notes_mailto_wiznotes.py` - 从剪贴板提取文章链接，批量发送到为知笔记。
 - **剪贴板HTML转换**: `clipboard_html_to_markdown.py` - 将剪贴板中的HTML内容直接转换为Markdown文件。
+- **飞书链接智能处理**: 自动检测飞书链接并提取微信公众号原文链接，优先使用原文内容。
+- **特殊网站处理**: 支持今日头条等网站的乱码修复，智能编码检测和压缩内容处理（gzip、deflate、brotli）。
+- **JavaScript重定向支持**: 可选集成selenium处理需要浏览器渲染的动态网站。
 
 ### 🏷️ 元数据管理
 - **元数据添加**: `add_meta_data.py` - 为思源笔记文档添加元数据信息。
@@ -59,20 +62,26 @@ pip install -r requirements.txt
 ```
 
 主要依赖包括：
-- `requests`
-- `python-dotenv`
-- `beautifulsoup4`
-- `lxml`
-- `html5lib`
-- `markdownify`
-- `html2text`
-- `Pillow`
-- `urllib3`
-- `aiohttp`
-- `aiofiles`
-- `qiniu`
-- `pyperclip`
-- `yagmail`
+- `requests` - HTTP请求库
+- `python-dotenv` - 环境变量管理
+- `beautifulsoup4` - HTML解析
+- `lxml` - XML/HTML解析器
+- `html5lib` - HTML5解析器
+- `markdownify` - HTML转Markdown
+- `html2text` - HTML转文本
+- `Pillow` - 图像处理
+- `urllib3` - HTTP客户端
+- `aiohttp` - 异步HTTP客户端
+- `aiofiles` - 异步文件操作
+- `qiniu` - 七牛云SDK
+- `pyperclip` - 剪贴板操作
+- `yagmail` - 邮件发送
+- `brotli` - Brotli压缩支持
+- `chardet` - 智能编码检测
+
+**可选依赖**（用于处理JavaScript重定向网站）：
+- `selenium` - 浏览器自动化
+- `webdriver-manager` - ChromeDriver自动管理
 
 ## 快速开始
 
@@ -134,7 +143,7 @@ python config_manager.py --load my_config.json
 根据你的需求执行相应的脚本。例如：
 
 ```bash
-# 将剪贴板中的URL一键存入思源
+# 将剪贴板中的URL一键存入思源（支持飞书链接智能处理）
 python urls_to_siyuan.py
 
 # 将剪贴板中的HTML转换为Markdown
@@ -142,6 +151,12 @@ python clipboard_html_to_markdown.py
 
 # 运行SQL查询演示
 python examples/advanced_query_demo.py
+
+# 演示飞书链接处理功能
+python demo_feishu_feature.py
+
+# 测试特殊网站处理功能
+python test/test_toutiao_fix.py
 ```
 
 ## 新功能使用指南
@@ -191,6 +206,63 @@ python examples/advanced_query_demo.py
 ```
 
 详细使用指南请参考：`docs/思源笔记高级SQL查询使用指南.md`
+
+### 🔗 飞书链接智能处理
+
+本项目支持飞书链接的智能处理，自动提取微信公众号原文链接：
+
+#### 功能特性
+- **自动检测**：识别以 `https://waytoagi.feishu.cn/` 开头的飞书链接
+- **智能提取**：在页面前10行中搜索微信公众号原文链接
+- **优先原文**：找到原文链接时优先使用原文内容
+- **回退机制**：未找到原文链接时使用飞书页面内容
+- **格式兼容**：支持多种原文链接格式
+
+#### 支持的原文链接格式
+```
+原文链接：https://mp.weixin.qq.com/s/abc123
+原文链接:https://mp.weixin.qq.com/s/def456
+原文链接： https://mp.weixin.qq.com/s/ghi789
+原文链接 : https://mp.weixin.qq.com/s/jkl012
+```
+
+#### 使用方法
+```bash
+# 复制飞书链接到剪贴板，然后运行：
+python urls_to_siyuan.py
+
+# 或者只转换为Markdown：
+python urls_to_markdown.py
+```
+
+详细说明请参考：`docs/飞书链接微信原文提取功能说明.md`
+
+### 🛠️ 特殊网站处理
+
+项目包含针对特殊网站的处理优化：
+
+#### 编码和压缩处理
+- **智能编码检测**：使用chardet自动检测字符编码
+- **压缩内容支持**：自动处理gzip、deflate、brotli压缩格式
+- **多编码尝试**：按优先级尝试UTF-8、GBK、GB2312等编码
+- **HTML meta解析**：从页面meta标签提取编码信息
+
+#### JavaScript重定向支持
+对于需要浏览器渲染的网站，可以安装可选依赖：
+```bash
+# 安装selenium支持
+pip install selenium webdriver-manager
+```
+
+#### 使用示例
+```bash
+# 处理今日头条等特殊网站（已自动优化）
+python urls_to_siyuan.py
+
+# 查看处理日志了解编码检测过程
+```
+
+详细说明请参考：`docs/今日头条乱码修复说明.md` 和 `docs/修复总结和使用指南.md`
 
 ### ⚙️ 配置管理系统
 
@@ -247,25 +319,43 @@ python urls_to_siyuan.py
 
 ```
 siyuan_scripts/
-├── .git/
-├── .gitignore
 ├── docs/                        # 项目文档
 │   ├── 思源笔记API.md
 │   ├── 思源笔记数据库表与字段.md
-│   └── 思源笔记高级SQL查询使用指南.md
+│   ├── 思源笔记高级SQL查询使用指南.md
+│   ├── 思源笔记SQL查询系统总结.md
+│   ├── 配置系统使用说明.md
+│   ├── 飞书链接微信原文提取功能说明.md
+│   ├── 功能实现总结.md
+│   ├── 今日头条乱码修复说明.md
+│   ├── 修复总结和使用指南.md
+│   └── 七牛云文件批量删除使用说明.md
 ├── examples/                    # 示例代码
 │   ├── advanced_query_demo.py   # SQL查询演示脚本
 │   └── siyuan_advanced_queries.json # 导出的查询数据
 ├── export_wiznotes/             # 为知笔记导出模块
+│   ├── wiz_client.py           # 为知笔记客户端
+│   ├── note_exporter.py        # 笔记导出器
+│   ├── collaboration_parser.py # 协作笔记解析器
+│   └── utils.py                # 工具函数
 ├── output/                      # 脚本输出目录
 ├── test/                        # 测试代码
+│   ├── test_feishu_integration.py # 飞书功能集成测试
+│   ├── test_feishu_wechat_extraction.py # 飞书微信链接提取测试
+│   ├── test_toutiao_fix.py     # 今日头条修复测试
+│   └── ... (其他测试文件)
 ├── utilities/                   # 核心功能工具库
+│   ├── api_client.py           # 思源API客户端
 │   ├── advanced_sql_queries.py # 高级SQL查询模块
-│   ├── api_client.py           # API客户端
-│   ├── clipboard_manager.py    # 剪贴板管理
+│   ├── url_to_markdown.py      # URL转Markdown转换器
+│   ├── web_downloader.py       # 网页下载器
 │   ├── html_converter.py       # HTML转换器
+│   ├── media_downloader.py     # 媒体下载器
+│   ├── clipboard_manager.py    # 剪贴板管理
+│   ├── special_site_handler.py # 特殊网站处理器
+│   ├── markdown_importer.py    # Markdown导入器
+│   ├── media_manager.py        # 媒体管理器
 │   └── ... (其他工具模块)
-├── __pycache__/
 ├── add_meta_data.py             # 添加元数据
 ├── api_test.ipynb               # API测试Jupyter Notebook
 ├── clipboard_html_to_markdown.py # 剪贴板HTML转Markdown
@@ -274,6 +364,7 @@ siyuan_scripts/
 ├── config_manager.py            # 配置管理工具
 ├── create_notes_from_md.py      # 从MD文件创建笔记
 ├── delete_qiniu_files.py        # 删除七牛云文件
+├── demo_feishu_feature.py       # 飞书功能演示脚本
 ├── export_wiznotes_to_md.py     # 导出为知笔记为MD
 ├── project_config.json          # 项目配置文件
 ├── query_to_csv.py              # 查询并导出为CSV
@@ -281,25 +372,30 @@ siyuan_scripts/
 ├── README.md                    # 本文档
 ├── requirements.txt             # Python依赖
 ├── siyuan_advanced_queries.json # SQL查询数据导出
-├── test_config.json             # 测试配置文件
 ├── urls_to_markdown.py          # 网址转Markdown
 ├── urls_to_siyuan.py            # 网址转思源笔记
-├── wiznotes_to_siyuan.py        # 为知笔记迁移到思源
-├── 七牛云文件批量删除使用说明.md
-├── 思源笔记SQL查询系统总结.md    # SQL查询系统总结
-└── 配置系统使用说明.md          # 配置系统使用指南
+└── wiznotes_to_siyuan.py        # 为知笔记迁移到思源
 ```
 
 ## 📚 相关文档
 
 项目包含详细的使用文档和说明：
 
+### 核心功能文档
 - **`docs/思源笔记高级SQL查询使用指南.md`** - SQL查询系统完整使用指南，包含所有22个查询场景的详细说明
-- **`思源笔记SQL查询系统总结.md`** - SQL查询系统的项目总结和核心特性介绍
-- **`配置系统使用说明.md`** - 配置管理系统的详细使用说明，包含命令行和程序接口
-- **`七牛云文件批量删除使用说明.md`** - 七牛云文件批量删除工具的使用说明
+- **`docs/思源笔记SQL查询系统总结.md`** - SQL查询系统的项目总结和核心特性介绍
+- **`docs/配置系统使用说明.md`** - 配置管理系统的详细使用说明，包含命令行和程序接口
 - **`docs/思源笔记API.md`** - 思源笔记API接口文档
 - **`docs/思源笔记数据库表与字段.md`** - 思源笔记数据库结构说明
+
+### 新功能文档
+- **`docs/飞书链接微信原文提取功能说明.md`** - 飞书链接智能处理功能的详细使用指南
+- **`docs/功能实现总结.md`** - 飞书链接功能的实现总结和技术细节
+- **`docs/今日头条乱码修复说明.md`** - 今日头条等网站乱码问题的修复说明
+- **`docs/修复总结和使用指南.md`** - 编码检测和压缩处理功能的综合使用指南
+
+### 工具使用文档
+- **`docs/七牛云文件批量删除使用说明.md`** - 七牛云文件批量删除工具的使用说明
 
 ## 安全提醒
 - **数据备份**: 在执行任何可能修改数据的脚本前，请务必备份你的思源笔记数据。
