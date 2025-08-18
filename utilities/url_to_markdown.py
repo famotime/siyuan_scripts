@@ -249,7 +249,12 @@ class URLToMarkdownConverter:
         if urls:
             for i, url in enumerate(urls, 1):
                 try:
-                    logger.info(f"\n[{i}/{len(urls)}] 正在转换: {url}")
+                    # 检查是否是飞书链接，如果是则显示特殊提示
+                    if url.startswith("https://waytoagi.feishu.cn/"):
+                        logger.info(f"\n[{i}/{len(urls)}] 正在处理飞书链接: {url}")
+                        logger.info("  🔍 检测飞书链接，将自动提取微信原文链接...")
+                    else:
+                        logger.info(f"\n[{i}/{len(urls)}] 正在转换: {url}")
 
                     # 转换URL为Markdown，不指定文件名，让系统自动生成
                     result_path = await self.convert_url_to_markdown(

@@ -129,6 +129,84 @@ class WebDownloader:
 
         return 'utf-8'  # 默认使用UTF-8
 
+    def _extract_wechat_original_link(self, content: str) -> Optional[str]:
+        """
+        从飞书页面内容中提取微信公众号原文链接
+
+        :param content: 网页HTML内容
+        :return: 微信公众号原文链接，如果没有找到则返回None
+        """
+        try:
+            # 首先尝试在前10行中搜索原文链接格式
+            lines = content.split('\n')[:10]
+
+            # 在前10行中搜索原文链接
+            for line in lines:
+                # 匹配各种可能的原文链接格式，使用更精确的正则表达式
+                patterns = [
+                    r'原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
+                    r'原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
+                    r'原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
+                    r'原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
+                    r'原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
+                    r'原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
+                ]
+
+                for pattern in patterns:
+                    match = re.search(pattern, line)
+                    if match:
+                        original_url = match.group(1)
+                        # 检查链接是否被截断，如果是则跳过
+                        if '...' in original_url or len(original_url) < 40:
+                            continue
+                        logger.info(f"在飞书页面中找到微信公众号原文链接: {original_url}")
+                        return original_url
+
+            # 如果前10行没找到，搜索整个页面中的完整微信链接
+            # 这是为了处理动态加载内容的情况
+            wechat_patterns = [
+                r'https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+',  # 短链接格式
+                r'https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+',    # 长链接格式
+            ]
+
+            all_matches = []
+            for pattern in wechat_patterns:
+                matches = re.findall(pattern, content)
+                all_matches.extend(matches)
+
+            if all_matches:
+                # 去重
+                unique_matches = list(set(all_matches))
+
+                # 优先级排序：
+                # 1. 过滤掉明显被截断的链接（包含...或长度过短）
+                # 2. 选择最长的链接（通常是完整链接）
+                # 3. 优先选择包含完整ID的链接
+
+                valid_matches = []
+                for link in unique_matches:
+                    # 过滤条件：不包含...，长度大于40，不以...结尾
+                    if ('...' not in link and
+                        len(link) > 40 and
+                        not link.endswith('...')):
+                        valid_matches.append(link)
+
+                if valid_matches:
+                    # 在有效链接中选择最长的
+                    original_url = max(valid_matches, key=len)
+                else:
+                    # 如果没有有效链接，选择最长的（可能被截断）
+                    original_url = max(unique_matches, key=len)
+
+                logger.info(f"在飞书页面中找到微信公众号原文链接: {original_url}")
+                return original_url
+
+            return None
+
+        except Exception as e:
+            logger.error(f"提取微信原文链接时出错: {e}")
+            return None
+
     def fetch_webpage(self, url: str) -> Optional[str]:
         """
         获取网页内容
@@ -137,6 +215,42 @@ class WebDownloader:
         :return: 网页HTML内容，失败时返回None
         """
         try:
+            # 检查是否是飞书链接，如果是则先尝试提取原文链接
+            if url.startswith("https://waytoagi.feishu.cn/"):
+                logger.info(f"检测到飞书链接，尝试提取微信公众号原文链接: {url}")
+
+                # 先获取飞书页面内容
+                headers = self._get_site_specific_headers(url)
+                response = requests.get(url, headers=headers, timeout=30)
+                response.raise_for_status()
+
+                # 获取原始内容并解码
+                raw_content = response.content
+                content_encoding = response.headers.get('Content-Encoding', '').lower()
+                if content_encoding:
+                    raw_content = self._decompress_content(raw_content, content_encoding)
+
+                detected_encoding = self._detect_encoding(raw_content, response.encoding)
+                try:
+                    feishu_content = raw_content.decode(detected_encoding)
+                except UnicodeDecodeError:
+                    try:
+                        feishu_content = raw_content.decode('utf-8', errors='replace')
+                    except:
+                        feishu_content = raw_content.decode('latin-1')
+
+                # 尝试提取微信原文链接
+                original_url = self._extract_wechat_original_link(feishu_content)
+
+                if original_url:
+                    logger.info(f"  ✅ 找到微信原文链接: {original_url}")
+                    logger.info(f"  🔄 重定向到原文链接获取内容...")
+                    # 递归调用，使用原文链接获取内容
+                    return self.fetch_webpage(original_url)
+                else:
+                    logger.info("  ❌ 未找到微信公众号原文链接，使用飞书页面内容")
+                    return feishu_content
+
             # 获取针对特定网站的请求头
             headers = self._get_site_specific_headers(url)
 
