@@ -18,7 +18,7 @@ class CustomMarkdownConverter(markdownify.MarkdownConverter):
     """
     自定义MarkdownConverter，将div标签转换为换行
     """
-    def convert_div(self, el, text, convert_as_inline):
+    def convert_div(self, el, text, convert_as_inline=False, **kwargs):
         """将div标签转换为换行"""
         # 检查div是否只包含空白内容、br标签或HTML实体
         if not text.strip():
@@ -112,7 +112,10 @@ class NoteExporter:
                     safe_title = self._get_valid_filename(note_title)
                     if safe_title.lower().endswith('.md'):
                         safe_title = safe_title[:-3]  # 去掉 .md 后缀
-                    note_assets_dir = current_path / f"{safe_title}_assets"
+
+                    # 为资源目录使用更短的名称，避免路径过长
+                    # 使用笔记的docGuid作为资源目录名，确保唯一性且路径较短
+                    note_assets_dir = current_path / f"{doc_guid}_assets"
 
                     # 处理HTML内容
                     html_content = note_content['html']
@@ -559,7 +562,7 @@ class NoteExporter:
         filename = filename.strip()
         if not filename:  # 如果处理后为空
             filename = '_'
-        elif len(filename) > 200:  # 如果文件名过长
+        elif len(filename) > 100:  # 减少文件名长度限制，避免路径过长
             # 保留原来的逻辑，使用splitext来分离真正的扩展名
             # 从后往前找最后一个点，确保是真正的文件扩展名
             if '.' in filename:
@@ -569,13 +572,13 @@ class NoteExporter:
                 if len(potential_ext) <= 10 and potential_ext[1:].replace('_', '').replace('-', '').isalnum():
                     # 保留真正的扩展名
                     base = filename[:last_dot_pos]
-                    filename = base[:196] + '...' + potential_ext
+                    filename = base[:96] + '...' + potential_ext
                 else:
                     # 没有真正的扩展名，直接截断
-                    filename = filename[:197] + '...'
+                    filename = filename[:97] + '...'
             else:
                 # 没有扩展名，直接截断
-                filename = filename[:197] + '...'
+                filename = filename[:97] + '...'
 
         return filename
 
