@@ -47,22 +47,51 @@ class URLToMarkdownConverter:
         :param url: 网页URL
         :return: 安全的文件名
         """
-        # 清理标题作为文件名
-        filename = re.sub(r'[^\w\s\-_.]', '', title)
-        filename = re.sub(r'[-\s]+', '-', filename)
-        filename = filename.strip('-')
+        # 改进的文件名清理逻辑，保留更多有意义的标点符号
+        filename = title
 
-        # 如果标题为空或太短，使用URL的域名
+        # 第一步：替换文件系统不允许的字符为安全字符
+        # Windows/Linux/macOS 文件名不能包含的字符: \ / : * ? " < > |
+        invalid_chars = {
+            '\\': '＼',  # 反斜杠 -> 全角反斜杠
+            '/': '／',   # 斜杠 -> 全角斜杠
+            ':': '：',   # 冒号 -> 中文冒号
+            '*': '＊',   # 星号 -> 全角星号
+            '?': '？',   # 问号 -> 中文问号
+            '"': '＂',   # 双引号 -> 全角双引号
+            '<': '＜',   # 小于号 -> 全角小于号
+            '>': '＞',   # 大于号 -> 全角大于号
+            '|': '｜'    # 竖线 -> 全角竖线
+        }
+
+        for invalid_char, replacement in invalid_chars.items():
+            filename = filename.replace(invalid_char, replacement)
+
+        # 第二步：处理连续的空格和特殊字符
+        # 将多个连续空格替换为单个空格
+        filename = re.sub(r'\s+', ' ', filename)
+
+        # 第三步：清理首尾空格和特殊字符
+        filename = filename.strip(' .-_')
+
+        # 第四步：如果标题为空或太短，使用URL的域名
         if not filename or len(filename) < 3:
             from urllib.parse import urlparse
             parsed_url = urlparse(url)
             filename = parsed_url.netloc.replace('.', '-')
 
-        # 限制文件名长度
-        if len(filename) > 50:
-            filename = filename[:50]
+        # 第五步：限制文件名长度（考虑中文字符）
+        if len(filename) > 80:  # 增加长度限制，因为中文字符占用更多空间
+            filename = filename[:80]
+            # 确保不在中文字符中间截断
+            if len(filename.encode('utf-8')) > len(filename):
+                # 包含中文字符，更保守地截断
+                filename = filename[:60]
 
-        base_filename = filename
+        # 第六步：再次清理可能的尾部字符
+        filename = filename.strip(' .-_')
+
+        # 第七步：添加文件扩展名
         filename = f"{filename}.md"
 
         return filename
@@ -94,8 +123,8 @@ class URLToMarkdownConverter:
 
             counter += 1
 
-            # 防止无限循环，最多尝试1000次
-            if counter > 1000:
+            # 防止无限循环，最多尝试100次
+            if counter > 100:
                 # 如果还是重复，添加时间戳
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 return f"{base_name}_{timestamp}.{extension}"
@@ -112,7 +141,8 @@ class URLToMarkdownConverter:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # 构建文档头部
-        header_parts = [f"# {page_info['title']}", ""]
+        # header_parts = [f"# {page_info['title']}", ""]
+        header_parts = [f"", ""]
 
         # 添加元数据
         metadata = [
