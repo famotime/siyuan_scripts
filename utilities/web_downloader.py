@@ -137,69 +137,87 @@ class WebDownloader:
         :return: 微信公众号原文链接，如果没有找到则返回None
         """
         try:
-            # 首先尝试在前10行中搜索原文链接格式
+            # 匹配各种可能的原文链接格式，使用更精确的正则表达式
+            patterns = [
+                r"""原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)""",
+                r"""原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)""",
+                r"""原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)""",
+                r"""原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"'\s<>]+)""",
+                r"""原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"'\s<>]+)""",
+                r"""原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"'\s<>]+)""",
+            ]
+
+            wechat_patterns = [
+                r"https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+",  # 短链接格式
+                r"""https://mp\.weixin\.qq\.com/s\?[^"'\s<>]+""",    # 长链接格式
+            ]
+
             lines = content.split('\n')[:10]
 
-            # 在前10行中搜索原文链接
-            for line in lines:
-                # 匹配各种可能的原文链接格式，使用更精确的正则表达式
-                patterns = [
-                    r'原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
-                    r'原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
-                    r'原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+)',
-                    r'原文链接[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
-                    r'原文链接\s*[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
-                    r'原文链接\s+[：:]\s*(https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+)',
-                ]
+            def normalize_link(raw_link: str) -> str:
+                """清洗HTML中的原文链接，移除转义符和冗余片段"""
+                cleaned = html.unescape(raw_link.strip())
+                cleaned = cleaned.replace('\u200b', '').replace('\u00a0', '')
+                if '#wechat_redirect' in cleaned:
+                    cleaned = cleaned.split('#wechat_redirect', 1)[0]
+                cleaned = cleaned.rstrip('?')
+                return cleaned
 
+            def add_candidate(raw_link: str, candidates: list, seen: set):
+                cleaned = normalize_link(raw_link)
+                if not cleaned:
+                    return
+                if '...' in cleaned or cleaned.endswith('...'):
+                    return
+                if cleaned not in seen:
+                    seen.add(cleaned)
+                    candidates.append(cleaned)
+
+            def select_best_link(candidates: list) -> Optional[str]:
+                if not candidates:
+                    return None
+
+                def is_short_form(link: str) -> bool:
+                    return link.startswith('https://mp.weixin.qq.com/s/') and '?' not in link
+
+                def is_long_enough(link: str) -> bool:
+                    return len(link) > 40
+
+                short_links = [link for link in candidates if is_short_form(link) and is_long_enough(link)]
+                if short_links:
+                    return short_links[0]
+
+                query_links = [link for link in candidates if link.startswith('https://mp.weixin.qq.com/s?') and is_long_enough(link)]
+                if query_links:
+                    return query_links[0]
+
+                long_links = [link for link in candidates if is_long_enough(link)]
+                if long_links:
+                    return long_links[0]
+
+                return candidates[0]
+
+            candidates = []
+            seen_links = set()
+
+            # 优先在前10行中尝试收集候选链接
+            for line in lines:
                 for pattern in patterns:
                     match = re.search(pattern, line)
                     if match:
-                        original_url = match.group(1)
-                        # 检查链接是否被截断，如果是则跳过
-                        if '...' in original_url or len(original_url) < 40:
-                            continue
-                        logger.info(f"在飞书页面中找到微信公众号原文链接: {original_url}")
-                        return original_url
+                        add_candidate(match.group(1), candidates, seen_links)
 
-            # 如果前10行没找到，搜索整个页面中的完整微信链接
-            # 这是为了处理动态加载内容的情况
-            wechat_patterns = [
-                r'https://mp\.weixin\.qq\.com/s/[A-Za-z0-9_-]+',  # 短链接格式
-                r'https://mp\.weixin\.qq\.com/s\?[^"\s<>\']+',    # 长链接格式
-            ]
-
-            all_matches = []
+            # 如果前10行未找到足够信息，则扫描整个页面
             for pattern in wechat_patterns:
                 matches = re.findall(pattern, content)
-                all_matches.extend(matches)
+                for link in matches:
+                    add_candidate(link, candidates, seen_links)
 
-            if all_matches:
-                # 去重
-                unique_matches = list(set(all_matches))
-
-                # 优先级排序：
-                # 1. 过滤掉明显被截断的链接（包含...或长度过短）
-                # 2. 选择最长的链接（通常是完整链接）
-                # 3. 优先选择包含完整ID的链接
-
-                valid_matches = []
-                for link in unique_matches:
-                    # 过滤条件：不包含...，长度大于40，不以...结尾
-                    if ('...' not in link and
-                        len(link) > 40 and
-                        not link.endswith('...')):
-                        valid_matches.append(link)
-
-                if valid_matches:
-                    # 在有效链接中选择最长的
-                    original_url = max(valid_matches, key=len)
-                else:
-                    # 如果没有有效链接，选择最长的（可能被截断）
-                    original_url = max(unique_matches, key=len)
-
-                logger.info(f"在飞书页面中找到微信公众号原文链接: {original_url}")
-                return original_url
+            if candidates:
+                original_url = select_best_link(candidates)
+                if original_url:
+                    logger.info(f"在飞书页面中找到微信公众号原文链接: {original_url}")
+                    return original_url
 
             return None
 
@@ -400,3 +418,4 @@ class WebDownloader:
             'author': "",
             'publish_time': ""
         }
+
