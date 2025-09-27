@@ -34,5 +34,5 @@ When modifying or adding any code files, the following coding requirements must 
 - Encoding should be unified to UTF-8 (without BOM). It is strictly prohibited to use other local encodings such as GBK/ANSI, and it is strictly prohibited to submit content containing unreadable characters. 
 - When modifying or adding files, be sure to save them in UTF-8 format; if you find any files that are not in UTF-8 format before submitting, please convert them to UTF-8 before submitting.
 
-## ??
-????????????????????????????????????????????
+## 总结汇报
+完成问题分析和代码编辑后，使用中文总结汇报，概述问题原因、解决方案、修改内容、测试结果、注意事项等。
