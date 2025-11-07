@@ -17,7 +17,7 @@
 - **剪贴板HTML转换**: `clipboard_html_to_markdown.py` - 将剪贴板中的HTML内容直接转换为Markdown文件。
 - **飞书链接智能处理**: 自动检测飞书链接并提取微信公众号原文链接，优先使用原文内容。
 - **特殊网站处理**: 支持今日头条等网站的乱码修复，智能编码检测和压缩内容处理（gzip、deflate、brotli）。
-- **JavaScript重定向支持**: 可选集成selenium处理需要浏览器渲染的动态网站。
+- **JavaScript重定向支持**: 可选集成 Playwright 处理需要浏览器渲染的动态网站。
 
 ### 🏷️ 元数据管理
 - **元数据添加**: `add_meta_data.py` - 为思源笔记文档添加元数据信息。
@@ -80,8 +80,7 @@ pip install -r requirements.txt
 - `chardet` - 智能编码检测
 
 **可选依赖**（用于处理JavaScript重定向网站）：
-- `selenium` - 浏览器自动化
-- `webdriver-manager` - ChromeDriver自动管理
+- `playwright` - 现代浏览器自动化与渲染（需安装浏览器内核）
 
 ## 快速开始
 
@@ -248,10 +247,10 @@ python urls_to_markdown.py
 - **HTML meta解析**：从页面meta标签提取编码信息
 
 #### JavaScript重定向支持
-对于需要浏览器渲染的网站，可以安装可选依赖：
+对于需要浏览器渲染的网站（如今日头条），安装 Playwright：
 ```bash
-# 安装selenium支持
-pip install selenium webdriver-manager
+pip install playwright
+python -m playwright install chromium
 ```
 
 #### 使用示例

@@ -180,7 +180,9 @@ class URLToMarkdownConverter:
             # 检查是否需要特殊处理
             if self.special_site_handler.can_handle(url):
                 logger.info(f"使用特殊处理器处理: {url}")
-                special_result = self.special_site_handler.get_content(url)
+                # 注意：Playwright 同步 API 不能在事件循环内直接调用，这里放到线程池
+                loop = asyncio.get_running_loop()
+                special_result = await loop.run_in_executor(None, self.special_site_handler.get_content, url)
 
                 if special_result:
                     html_content = special_result['html_content']
@@ -202,13 +204,40 @@ class URLToMarkdownConverter:
                 if not html_content:
                     return None
 
-                # 提取页面信息
-                page_info = self.web_downloader.extract_page_info(html_content)
-
                 # 检查是否是JavaScript重定向页面
                 if self.web_downloader._is_js_redirect_page(html_content):
-                    logger.warning(f"检测到JavaScript重定向页面，建议安装selenium处理: {url}")
-                    logger.info(self.special_site_handler.get_installation_guide())
+                    logger.warning(f"检测到JavaScript重定向页面: {url}")
+                    
+                    # 如果检测到重定向页面，且URL是今日头条，尝试使用特殊处理器
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc.lower()
+                    
+                    if 'toutiao.com' in domain and self.special_site_handler.can_handle(url):
+                        logger.info("检测到今日头条链接且为JavaScript重定向页面，尝试使用Playwright处理...")
+                        loop = asyncio.get_running_loop()
+                        special_result = await loop.run_in_executor(None, self.special_site_handler.get_content, url)
+                        
+                        if special_result:
+                            logger.info("✅ 使用Playwright成功获取内容")
+                            html_content = special_result['html_content']
+                            page_info = {
+                                'title': special_result['title'],
+                                'description': special_result['description'],
+                                'author': special_result['author'],
+                                'publish_time': special_result['publish_time']
+                            }
+                        else:
+                            logger.warning("Playwright处理失败，使用原始内容")
+                            page_info = self.web_downloader.extract_page_info(html_content)
+                            logger.info(self.special_site_handler.get_installation_guide())
+                    else:
+                        # 不是今日头条或其他特殊网站，只提示
+                        page_info = self.web_downloader.extract_page_info(html_content)
+                        logger.info(self.special_site_handler.get_installation_guide())
+                else:
+                    # 正常页面，直接提取信息
+                    page_info = self.web_downloader.extract_page_info(html_content)
 
             # logger.info(f"页面标题: {page_info['title']}")
 

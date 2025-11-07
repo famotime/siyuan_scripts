@@ -370,34 +370,61 @@ class HTMLConverter:
         """
         content = markdown_content
 
-        # logger.info(f"开始替换媒体链接，映射数量: {len(media_mapping)}")
+        if not media_mapping:
+            return content
+
+        logger.info(f"开始替换媒体链接，映射数量: {len(media_mapping)}")
 
         for original_url, local_path in media_mapping.items():
-            # 记录替换前的内容长度
+            # 记录替换前的内容
             before_count = content.count(original_url)
+            
+            # 如果URL中没有出现，尝试处理URL编码和变体
+            if before_count == 0:
+                # 尝试URL编码变体
+                encoded_variants = [
+                    original_url.replace(' ', '%20'),
+                    original_url.replace(' ', '+'),
+                    original_url.replace('%20', ' '),
+                    original_url.replace('+', ' '),
+                ]
+                for variant in encoded_variants:
+                    if variant in content:
+                        content = content.replace(variant, local_path)
+                        logger.debug(f"替换URL变体: {variant[:50]}... -> {local_path}")
+                        break
 
             # 多种格式的链接替换
             replacements = [
-                # Markdown图片格式
+                # Markdown图片格式: ![alt](url)
                 (f"]({original_url})", f"]({local_path})"),
-                # HTML src属性格式
+                # Markdown图片格式（带空格）: ![alt]( url )
+                (f"]( {original_url} )", f"]({local_path})"),
+                # HTML img标签 src属性
                 (f'src="{original_url}"', f'src="{local_path}"'),
                 (f"src='{original_url}'", f"src='{local_path}'"),
-                # 处理URL编码的情况
-                (original_url.replace(' ', '%20'), local_path),
-                # 处理相对路径转换
+                (f'src={original_url}', f'src={local_path}'),
+                # HTML img标签 data-src属性（懒加载）
+                (f'data-src="{original_url}"', f'data-src="{local_path}"'),
+                (f"data-src='{original_url}'", f"data-src='{local_path}'"),
+                # HTML img标签 data-original属性
+                (f'data-original="{original_url}"', f'data-original="{local_path}"'),
+                (f"data-original='{original_url}'", f"data-original='{local_path}'"),
+                # 直接替换URL（作为最后手段）
                 (original_url, local_path)
             ]
 
+            replaced_count = 0
             for old_pattern, new_pattern in replacements:
-                content = content.replace(old_pattern, new_pattern)
+                if old_pattern in content:
+                    content = content.replace(old_pattern, new_pattern)
+                    replaced_count += content.count(new_pattern) - content.count(old_pattern)
+                    # 只替换一次，避免重复替换
+                    break
 
-            # 记录替换后的情况
-            # after_count = content.count(original_url)
-            # replaced_count = before_count - after_count
-            # if replaced_count > 0:
-            #     logger.info(f"已替换 {replaced_count} 个链接: {original_url[:50]}... -> {local_path}")
-            # else:
-            #     logger.warning(f"未找到可替换的链接: {original_url[:50]}...")
+            if replaced_count > 0 or before_count > 0:
+                logger.info(f"已替换图片链接: {original_url[:60]}... -> {local_path}")
+            else:
+                logger.warning(f"未找到可替换的链接: {original_url[:60]}...")
 
         return content

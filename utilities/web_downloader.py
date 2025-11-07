@@ -300,7 +300,8 @@ class WebDownloader:
             # 检查是否是JavaScript重定向页面（如今日头条）
             if self._is_js_redirect_page(content):
                 logger.warning(f"检测到JavaScript重定向页面: {url}")
-                # 可以在这里添加特殊处理逻辑
+                logger.info("提示: 如果安装了 Playwright，程序会自动使用它处理此类页面")
+                # 注意：实际的特殊处理逻辑在url_to_markdown.py中通过special_site_handler实现
 
             # logger.info(f"成功获取网页内容，大小: {len(content)} 字符")
             return content
@@ -310,7 +311,12 @@ class WebDownloader:
             return None
 
     def _is_js_redirect_page(self, content: str) -> bool:
-        """检测是否是JavaScript重定向页面"""
+        """
+        检测是否是JavaScript重定向页面
+        
+        今日头条等网站会返回一个包含大量JavaScript代码的页面，
+        而不是实际的HTML内容。这个方法用于检测这种情况。
+        """
         # 检查内容长度和特征
         if len(content) < 1000:
             return False
@@ -320,15 +326,36 @@ class WebDownloader:
             'window._$jsvmprt',
             'var glb;',
             'function(b,e,f)',
-            'typeof window?global:window'
+            'typeof window?global:window',
+            '_$jsvmprt=function',
+            '<script>var glb'
         ]
 
         js_count = sum(1 for indicator in js_indicators if indicator in content)
 
         # 检查是否缺少实际的HTML内容结构
-        html_indicators = ['<article', '<main', '<div class="content', '<p>']
+        html_indicators = [
+            '<article',
+            '<main',
+            '<div class="content',
+            '<div class="article',
+            '<p>',
+            '<body><script>',  # 如果body标签后直接是script，可能是重定向页面
+        ]
         html_count = sum(1 for indicator in html_indicators if indicator in content)
+        
+        # 检查body标签是否为空或只包含script
+        import re
+        body_match = re.search(r'<body[^>]*>(.*?)</body>', content, re.IGNORECASE | re.DOTALL)
+        if body_match:
+            body_content = body_match.group(1).strip()
+            # 如果body内容主要是script标签，可能是重定向页面
+            if body_content and len(body_content) > 0:
+                script_ratio = len(re.findall(r'<script', body_content, re.IGNORECASE)) / max(len(re.findall(r'<[^>]+>', body_content)), 1)
+                if script_ratio > 0.7:  # 如果超过70%的标签是script，可能是重定向页面
+                    return True
 
+        # 如果检测到多个JavaScript指示器且缺少HTML内容，判定为重定向页面
         return js_count >= 2 and html_count == 0
 
     def extract_page_info(self, html_content: str) -> Dict[str, str]:
@@ -418,4 +445,3 @@ class WebDownloader:
             'author': "",
             'publish_time': ""
         }
-
