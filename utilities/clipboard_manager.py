@@ -4,7 +4,7 @@
 """
 
 import logging
-from typing import List
+from typing import List, Tuple
 
 try:
     import pyperclip
@@ -27,7 +27,7 @@ class ClipboardManager:
         """检查剪贴板功能是否可用"""
         return HAS_PYPERCLIP
 
-    def read_urls_from_clipboard(self) -> List[str]:
+    def read_urls_from_clipboard(self) -> Tuple[List[str], List[str]]:
         """
         从剪贴板读取URL列表
 
@@ -35,13 +35,13 @@ class ClipboardManager:
         """
         if not HAS_PYPERCLIP:
             logger.error("pyperclip库未安装，无法读取剪贴板内容")
-            return []
+            return [], []
 
         try:
             clipboard_content = pyperclip.paste()
             if not clipboard_content:
                 logger.warning("剪贴板为空")
-                return []
+                return [], []
 
             # 按行分割内容，支持%%%分隔符
             if "%%%" in clipboard_content:
@@ -64,7 +64,7 @@ class ClipboardManager:
 
         except Exception as e:
             logger.error(f"读取剪贴板失败: {e}")
-            return []
+            return [], []
 
     def write_to_clipboard(self, content: str) -> bool:
         """

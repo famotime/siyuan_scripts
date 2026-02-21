@@ -5,10 +5,13 @@ URL转Markdown转换器
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Optional, List, Dict
 from datetime import datetime
 import re
+from functools import partial
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from .web_downloader import WebDownloader
 from .html_converter import HTMLConverter
@@ -38,6 +41,168 @@ class URLToMarkdownConverter:
         self.media_downloader = MediaDownloader(self.output_dir)
         self.clipboard_manager = ClipboardManager()
         self.special_site_handler = SpecialSiteHandler()
+        self.url_timeout_seconds = 60
+        self.last_error: Dict[str, str] = {}
+        self._tracking_query_params = {
+            "timestamp",
+            "req_id",
+            "req_id_new",
+            "share_did",
+            "share_uid",
+            "share_token",
+            "use_new_style",
+            "from",
+            "source",
+            "wid",
+            "utm_source",
+            "utm_medium",
+            "utm_campaign",
+            "utm_term",
+            "utm_content",
+            "spm",
+            "fbclid",
+            "gclid",
+            "yclid",
+        }
+
+    def _set_last_error(self, code: str, message: str, stage: str = "") -> None:
+        """记录最近一次转换错误信息，便于批处理回退。"""
+        self.last_error = {
+            "code": code,
+            "message": message,
+            "stage": stage,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    def _remaining_seconds(self, start_time: float) -> float:
+        """返回当前URL剩余处理预算秒数。"""
+        return self.url_timeout_seconds - (time.monotonic() - start_time)
+
+    async def _run_blocking_with_timeout(self, func, *args, timeout: float):
+        """在线程池执行阻塞函数，并受限于剩余预算。"""
+        loop = asyncio.get_running_loop()
+        return await asyncio.wait_for(loop.run_in_executor(None, partial(func, *args)), timeout=timeout)
+
+    def _format_failed_url_note(self, item: Dict[str, str]) -> str:
+        """格式化失败URL的人工复核条目。"""
+        failed_url = item.get('url', '')
+        lines = [
+            "[待人工验证]",
+            f"时间: {item.get('timestamp', '')}",
+            f"URL: [{failed_url}]({failed_url})" if failed_url else "URL: ",
+            f"错误: {item.get('message', '')}",
+        ]
+        if item.get("stage"):
+            lines.append(f"阶段: {item['stage']}")
+        return "\n".join(lines)
+
+    def _save_collected_notes(self, collected_notes: List[str], failed_items: List[Dict[str, str]]) -> None:
+        """将碎笔记内容与失败URL条目统一写入碎笔记文件。"""
+        sections: List[str] = []
+        if collected_notes:
+            sections.extend(collected_notes)
+        if failed_items:
+            sections.extend([self._format_failed_url_note(item) for item in failed_items])
+
+        if not sections:
+            return
+
+        md_content = "\n\n%%%\n\n".join(sections)
+        collected_notes_filename = f"碎笔记{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        collected_notes_filename = self.get_unique_filename(collected_notes_filename)
+        collected_notes_md_path = self.output_dir / collected_notes_filename
+        collected_notes_md_path.write_text(md_content, encoding='utf-8')
+        logger.info(f"Markdown文件已保存: {collected_notes_md_path}")
+
+    def _build_dedup_key(self, raw_url: str) -> str:
+        """构建URL去重键，合并同一资源的不同分享参数链接。"""
+        try:
+            parsed = urlparse(raw_url.strip())
+        except Exception:
+            return raw_url.strip()
+
+        host = parsed.netloc.lower()
+        path = parsed.path.rstrip("/")
+        query_items = parse_qsl(parsed.query, keep_blank_values=False)
+
+        if "toutiao.com" in host:
+            article_match = re.search(r"/article/(\d+)", path)
+            if article_match:
+                return f"toutiao:article:{article_match.group(1)}"
+
+            query_map = {k: v for k, v in query_items}
+            for key in ("group_id", "article_id", "item_id"):
+                if query_map.get(key):
+                    return f"toutiao:article:{query_map[key]}"
+
+        filtered_query = []
+        for key, value in query_items:
+            key_lower = key.lower()
+            if key_lower in self._tracking_query_params:
+                continue
+            if key_lower.startswith("utm_"):
+                continue
+            filtered_query.append((key, value))
+
+        filtered_query.sort()
+        normalized_query = urlencode(filtered_query, doseq=True)
+        normalized_path = path or "/"
+
+        return urlunparse((
+            parsed.scheme.lower(),
+            host,
+            normalized_path,
+            "",
+            normalized_query,
+            "",
+        ))
+
+    def _deduplicate_urls(self, urls: List[str]) -> List[str]:
+        """按原顺序去重URL，避免重复处理。"""
+        seen = set()
+        deduplicated_urls: List[str] = []
+
+        for url in urls:
+            dedup_key = self._build_dedup_key(url)
+            if dedup_key in seen:
+                logger.info(f"跳过重复URL: {url}")
+                continue
+            seen.add(dedup_key)
+            deduplicated_urls.append(url)
+
+        return deduplicated_urls
+
+    def _unwrap_image_links_for_x(self, html_content: str, source_url: str) -> str:
+        """X帖子场景下，将仅包裹图片的链接解包为纯图片，避免Markdown出现图片外链包装。"""
+        try:
+            domain = (urlparse(source_url).netloc or "").lower()
+            if "x.com" not in domain and "twitter.com" not in domain:
+                return html_content
+        except Exception:
+            return html_content
+
+        # 常见格式：<a href="..."><img ...></a> 或 <a ...><picture>...<img ...></picture></a>
+        pattern = re.compile(
+            r"<a\b[^>]*>\s*((?:<picture\b[^>]*>.*?</picture>|<img\b[^>]*>))\s*</a>",
+            re.IGNORECASE | re.DOTALL,
+        )
+        return pattern.sub(r"\1", html_content)
+
+    def _strip_markdown_image_wrappers_for_x(self, markdown_content: str, source_url: str) -> str:
+        """X帖子场景下，把[![...](img)](link)压平为![...](img)。"""
+        try:
+            domain = (urlparse(source_url).netloc or "").lower()
+            if "x.com" not in domain and "twitter.com" not in domain:
+                return markdown_content
+        except Exception:
+            return markdown_content
+
+        # [![alt](img)](link) -> ![alt](img)
+        pattern = re.compile(
+            r"\[\s*!\[([^\]]*)\]\(([^)\n]+)\)\s*\]\(([^)\n]+)\)",
+            re.IGNORECASE,
+        )
+        return pattern.sub(r"![\1](\2)", markdown_content)
 
     def generate_filename(self, title: str, url: str) -> str:
         """
@@ -176,13 +341,23 @@ class URLToMarkdownConverter:
         :param download_media: 是否下载媒体文件
         :return: 输出文件路径，失败时返回None
         """
+        self.last_error = {}
+        start_time = time.monotonic()
+
         try:
             # 检查是否需要特殊处理
             if self.special_site_handler.can_handle(url):
                 logger.info(f"使用特殊处理器处理: {url}")
-                # 注意：Playwright 同步 API 不能在事件循环内直接调用，这里放到线程池
-                loop = asyncio.get_running_loop()
-                special_result = await loop.run_in_executor(None, self.special_site_handler.get_content, url)
+                remaining = self._remaining_seconds(start_time)
+                if remaining <= 0:
+                    self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "special_handler")
+                    return None
+
+                special_result = await self._run_blocking_with_timeout(
+                    self.special_site_handler.get_content,
+                    url,
+                    timeout=remaining
+                )
 
                 if special_result:
                     html_content = special_result['html_content']
@@ -193,15 +368,58 @@ class URLToMarkdownConverter:
                         'publish_time': special_result['publish_time']
                     }
                 else:
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc.lower()
+                    special_error = getattr(self.special_site_handler, "last_error", None)
+
+                    if "toutiao.com" in domain:
+                        if special_error:
+                            self.last_error = special_error
+                        else:
+                            self._set_last_error("DYNAMIC_PAGE_UNRESOLVED", "动态页面未成功解析，已转人工处理", "special_handler")
+                        logger.warning("特殊处理器未成功解析今日头条内容，转人工处理")
+                        return None
+
                     logger.warning("特殊处理器处理失败，回退到普通方式")
-                    html_content = self.web_downloader.fetch_webpage(url)
+                    remaining = self._remaining_seconds(start_time)
+                    if remaining <= 0:
+                        self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "web_fetch")
+                        return None
+
+                    html_content = await self._run_blocking_with_timeout(
+                        self.web_downloader.fetch_webpage,
+                        url,
+                        timeout=remaining
+                    )
                     if not html_content:
+                        if special_error:
+                            self.last_error = special_error
+                        else:
+                            self._set_last_error("FETCH_FAILED", "网页内容抓取失败", "web_fetch")
+                        return None
+                    if self.web_downloader._is_js_redirect_page(html_content):
+                        special_error = getattr(self.special_site_handler, "last_error", None)
+                        if special_error:
+                            self.last_error = special_error
+                        else:
+                            self._set_last_error("DYNAMIC_PAGE_UNRESOLVED", "动态页面未成功解析，已转人工处理", "web_fetch")
                         return None
                     page_info = self.web_downloader.extract_page_info(html_content)
             else:
                 # 获取网页内容
-                html_content = self.web_downloader.fetch_webpage(url)
+                remaining = self._remaining_seconds(start_time)
+                if remaining <= 0:
+                    self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "web_fetch")
+                    return None
+
+                html_content = await self._run_blocking_with_timeout(
+                    self.web_downloader.fetch_webpage,
+                    url,
+                    timeout=remaining
+                )
                 if not html_content:
+                    self._set_last_error("FETCH_FAILED", "网页内容抓取失败", "web_fetch")
                     return None
 
                 # 检查是否是JavaScript重定向页面
@@ -215,8 +433,16 @@ class URLToMarkdownConverter:
                     
                     if 'toutiao.com' in domain and self.special_site_handler.can_handle(url):
                         logger.info("检测到今日头条链接且为JavaScript重定向页面，尝试使用Playwright处理...")
-                        loop = asyncio.get_running_loop()
-                        special_result = await loop.run_in_executor(None, self.special_site_handler.get_content, url)
+                        remaining = self._remaining_seconds(start_time)
+                        if remaining <= 0:
+                            self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "special_handler")
+                            return None
+
+                        special_result = await self._run_blocking_with_timeout(
+                            self.special_site_handler.get_content,
+                            url,
+                            timeout=remaining
+                        )
                         
                         if special_result:
                             logger.info("✅ 使用Playwright成功获取内容")
@@ -228,9 +454,14 @@ class URLToMarkdownConverter:
                                 'publish_time': special_result['publish_time']
                             }
                         else:
-                            logger.warning("Playwright处理失败，使用原始内容")
-                            page_info = self.web_downloader.extract_page_info(html_content)
+                            logger.warning("Playwright处理失败，转人工处理")
+                            special_error = getattr(self.special_site_handler, "last_error", None)
+                            if special_error:
+                                self.last_error = special_error
+                            else:
+                                self._set_last_error("DYNAMIC_PAGE_UNRESOLVED", "动态页面未成功解析，已转人工处理", "special_handler")
                             logger.info(self.special_site_handler.get_installation_guide())
+                            return None
                     else:
                         # 不是今日头条或其他特殊网站，只提示
                         page_info = self.web_downloader.extract_page_info(html_content)
@@ -249,16 +480,25 @@ class URLToMarkdownConverter:
                 # logger.info(f"发现 {len(media_urls)} 个媒体文件")
 
                 if media_urls:
-                    media_mapping = await self.media_downloader.download_media_batch(media_urls, url)
+                    remaining = self._remaining_seconds(start_time)
+                    if remaining <= 0:
+                        self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "media_download")
+                        return None
+                    media_mapping = await asyncio.wait_for(
+                        self.media_downloader.download_media_batch(media_urls, url),
+                        timeout=remaining
+                    )
                     # logger.info(f"成功下载 {len(media_mapping)} 个媒体文件")
                 # else:
                 #     logger.warning("未发现任何媒体文件URL")
 
             # 清理HTML内容
             clean_html = self.html_converter.clean_html_for_conversion(html_content)
+            clean_html = self._unwrap_image_links_for_x(clean_html, url)
 
             # 转换为Markdown
             markdown_content = self.html_converter.convert_html_to_markdown(clean_html)
+            markdown_content = self._strip_markdown_image_wrappers_for_x(markdown_content, url)
 
             # 更新媒体链接
             if media_mapping:
@@ -278,10 +518,16 @@ class URLToMarkdownConverter:
             # 保存文件
             output_path.write_text(full_markdown, encoding='utf-8')
             logger.info(f"Markdown文件已保存: {output_path}")
-
+            self.last_error = {}
             return output_path
 
+        except asyncio.TimeoutError:
+            self._set_last_error("TIMEOUT_TOTAL", f"超时：单URL处理超过{self.url_timeout_seconds}秒", "timeout_guard")
+            logger.error(f"转换超时: {url}")
+            return None
         except Exception as e:
+            if not self.last_error:
+                self._set_last_error("CONVERT_ERROR", str(e), "convert")
             logger.error(f"转换过程出错: {e}")
             return None
 
@@ -293,18 +539,11 @@ class URLToMarkdownConverter:
         :return: 成功转换的文件路径列表
         """
         urls, collected_notes = self.clipboard_manager.read_urls_from_clipboard()
-
-        if collected_notes:
-            md_content = "\n\n%%%\n\n".join(collected_notes)
-            # 保存文件
-            collected_notes_filename = f"碎笔记{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-            collected_notes_filename = self.get_unique_filename(collected_notes_filename)
-            collected_notes_md_path = self.output_dir / collected_notes_filename
-            collected_notes_md_path.write_text(md_content, encoding='utf-8')
-            logger.info(f"Markdown文件已保存: {collected_notes_md_path}")
+        urls = self._deduplicate_urls(urls)
 
         # logger.info(f"开始批量转换 {len(urls)} 个URL...")
         successful_files = []
+        failed_items: List[Dict[str, str]] = []
         if urls:
             for i, url in enumerate(urls, 1):
                 try:
@@ -328,14 +567,28 @@ class URLToMarkdownConverter:
                         # logger.info(f"    ✓ 转换成功! 文件: {result_path.name} ({file_size:,} 字节)")
                     else:
                         logger.error(f"    ✗ 转换失败: {url}")
+                        last_error = self.last_error or {}
+                        failed_items.append({
+                            "url": url,
+                            "message": last_error.get("message", "转换失败，未返回具体错误"),
+                            "stage": last_error.get("stage", ""),
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        })
 
                 except Exception as e:
                     logger.error(f"    ✗ 转换出错: {url}, 错误: {e}")
+                    failed_items.append({
+                        "url": url,
+                        "message": str(e),
+                        "stage": "batch_loop",
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    })
 
             logger.info(f"\n批量转换完成! 成功: {len(successful_files)}/{len(urls)}")
         else:
             logger.warning("没有从剪贴板找到有效的URL")
 
+        self._save_collected_notes(collected_notes, failed_items)
         return successful_files
 
     def is_clipboard_available(self) -> bool:
