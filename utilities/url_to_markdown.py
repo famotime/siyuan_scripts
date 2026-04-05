@@ -4,6 +4,7 @@ URL转Markdown转换器
 """
 
 import asyncio
+import json
 import logging
 import time
 from pathlib import Path
@@ -13,11 +14,18 @@ import re
 from functools import partial
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
-from .web_downloader import WebDownloader
-from .html_converter import HTMLConverter
-from .media_downloader import MediaDownloader
-from .clipboard_manager import ClipboardManager
-from .special_site_handler import SpecialSiteHandler
+try:
+    from .web_downloader import WebDownloader
+    from .html_converter import HTMLConverter
+    from .media_downloader import MediaDownloader
+    from .clipboard_manager import ClipboardManager
+    from .special_site_handler import SpecialSiteHandler
+except ImportError:
+    from web_downloader import WebDownloader
+    from html_converter import HTMLConverter
+    from media_downloader import MediaDownloader
+    from clipboard_manager import ClipboardManager
+    from special_site_handler import SpecialSiteHandler
 
 logger = logging.getLogger(__name__)
 
@@ -539,25 +547,91 @@ class URLToMarkdownConverter:
         :return: 成功转换的文件路径列表
         """
         urls, collected_notes = self.clipboard_manager.read_urls_from_clipboard()
-        urls = self._deduplicate_urls(urls)
+        items = [{"url": url} for url in urls]
+        return await self.convert_url_items(items, download_media=download_media, collected_notes=collected_notes)
 
-        # logger.info(f"开始批量转换 {len(urls)} 个URL...")
+    def load_url_items_from_file(self, input_path: str) -> List[Dict[str, str]]:
+        payload_path = Path(input_path)
+        raw_content = payload_path.read_text(encoding="utf-8")
+        stripped = raw_content.strip()
+        if not stripped:
+            return []
+
+        if payload_path.suffix.lower() == ".json" or stripped.startswith("{") or stripped.startswith("["):
+            payload = json.loads(stripped)
+            if isinstance(payload, dict):
+                items = payload.get("items", [])
+            elif isinstance(payload, list):
+                items = payload
+            else:
+                raise ValueError("URL批处理文件格式无效")
+
+            normalized_items = []
+            for item in items:
+                if isinstance(item, str):
+                    normalized_items.append({"url": item})
+                    continue
+                url = (item.get("url") or "").strip()
+                if not url:
+                    continue
+                normalized_items.append(
+                    {
+                        "url": url,
+                        "title": (item.get("title") or "").strip(),
+                    }
+                )
+            return normalized_items
+
+        return [{"url": line.strip()} for line in stripped.splitlines() if line.strip()]
+
+    async def convert_urls_from_file(self, input_path: str, download_media: bool = True) -> List[Path]:
+        items = self.load_url_items_from_file(input_path)
+        return await self.convert_url_items(items, download_media=download_media)
+
+    async def convert_url_items(
+        self,
+        items: List[Dict[str, str]],
+        download_media: bool = True,
+        collected_notes: Optional[List[str]] = None,
+    ) -> List[Path]:
+        deduplicated_items: List[Dict[str, str]] = []
+        seen_urls = set()
+        for item in items:
+            url = (item.get("url") or "").strip()
+            if not url:
+                continue
+            normalized = self._build_dedup_key(url)
+            if normalized in seen_urls:
+                continue
+            seen_urls.add(normalized)
+            deduplicated_items.append(
+                {
+                    "url": url,
+                    "title": (item.get("title") or "").strip(),
+                }
+            )
+
         successful_files = []
         failed_items: List[Dict[str, str]] = []
-        if urls:
-            for i, url in enumerate(urls, 1):
+        if deduplicated_items:
+            for i, item in enumerate(deduplicated_items, 1):
+                url = item["url"]
                 try:
                     # 检查是否是飞书链接，如果是则显示特殊提示
                     if url.startswith("https://waytoagi.feishu.cn/"):
-                        logger.info(f"\n[{i}/{len(urls)}] 正在处理飞书链接: {url}")
+                        logger.info(f"\n[{i}/{len(deduplicated_items)}] 正在处理飞书链接: {url}")
                         logger.info("  🔍 检测飞书链接，将自动提取微信原文链接...")
                     else:
-                        logger.info(f"\n[{i}/{len(urls)}] 正在转换: {url}")
+                        logger.info(f"\n[{i}/{len(deduplicated_items)}] 正在转换: {url}")
+
+                    output_filename = None
+                    if item.get("title"):
+                        output_filename = self.generate_filename(item["title"], url)
 
                     # 转换URL为Markdown，不指定文件名，让系统自动生成
                     result_path = await self.convert_url_to_markdown(
                         url=url,
-                        output_filename=None,  # 使用网页标题自动生成文件名
+                        output_filename=output_filename,
                         download_media=download_media
                     )
 
@@ -584,11 +658,11 @@ class URLToMarkdownConverter:
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     })
 
-            logger.info(f"\n批量转换完成! 成功: {len(successful_files)}/{len(urls)}")
+            logger.info(f"\n批量转换完成! 成功: {len(successful_files)}/{len(deduplicated_items)}")
         else:
-            logger.warning("没有从剪贴板找到有效的URL")
+            logger.warning("没有找到有效的URL")
 
-        self._save_collected_notes(collected_notes, failed_items)
+        self._save_collected_notes(collected_notes or [], failed_items)
         return successful_files
 
     def is_clipboard_available(self) -> bool:

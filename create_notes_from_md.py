@@ -47,12 +47,20 @@ def test_connection(api_client):
         return False
 
 
-def main(md_folder=DEFAULT_MD_FOLDER, notebook_name=DEFAULT_NOTEBOOK_NAME, parent_folder=DEFAULT_PARENT_FOLDER, upload_media=True, convert_soft_breaks=True):
+def main(
+    md_folder=DEFAULT_MD_FOLDER,
+    notebook_name=DEFAULT_NOTEBOOK_NAME,
+    parent_folder=DEFAULT_PARENT_FOLDER,
+    upload_media=True,
+    convert_soft_breaks=True,
+    api_url=None,
+    api_token=None,
+):
     """主函数"""
     try:
         # 获取配置
-        api_token = os.getenv("SIYUAN_API_TOKEN", "")
-        api_url = os.getenv("SIYUAN_API_URL")
+        api_token = api_token if api_token is not None else os.getenv("SIYUAN_API_TOKEN", "")
+        api_url = api_url if api_url is not None else os.getenv("SIYUAN_API_URL")
 
         logger.info("=== 思源笔记 MD 文件导入工具 ===")
         logger.info(f"MD文件夹: {md_folder}")
@@ -66,14 +74,14 @@ def main(md_folder=DEFAULT_MD_FOLDER, notebook_name=DEFAULT_NOTEBOOK_NAME, paren
 
         # 测试连接
         if not test_connection(api_client):
-            return
+            return {"success": 0, "error": 1, "total": 0, "message": "连接思源失败"}
 
         # 检查MD文件夹是否存在
         md_path = Path(md_folder)
         if not md_path.exists():
             logger.error(f"MD文件夹不存在: {md_folder}")
             logger.info("请确保文件夹路径正确，或者修改配置")
-            return
+            return {"success": 0, "error": 1, "total": 0, "message": "MD文件夹不存在"}
 
         # 创建Markdown导入器
         importer = create_markdown_importer(api_client)
@@ -105,6 +113,8 @@ def main(md_folder=DEFAULT_MD_FOLDER, notebook_name=DEFAULT_NOTEBOOK_NAME, paren
         if result.get('error', 0) > 0:
             logger.warning(f"⚠️ 有 {result['error']} 个文件导入失败，请检查日志")
 
+        return result
+
     except Exception as e:
         logger.error(f"程序执行失败: {e}")
         logger.error("如果问题持续存在，请检查：")
@@ -112,6 +122,7 @@ def main(md_folder=DEFAULT_MD_FOLDER, notebook_name=DEFAULT_NOTEBOOK_NAME, paren
         logger.error("2. API地址是否正确")
         logger.error("3. API Token是否有效（如果需要）")
         logger.error("4. 媒体文件路径是否正确（如果启用媒体上传）")
+        return {"success": 0, "error": 1, "total": 0, "message": str(e)}
 
 
 if __name__ == "__main__":
