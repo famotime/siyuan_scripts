@@ -165,10 +165,10 @@ class MarkdownImporter:
 
         # 使用贪婪匹配，正确处理路径中的括号
         patterns = [
-            # 图片格式：![alt](path) - 贪婪匹配到最后的)
-            (r'!\[([^\]]*)\]\((.+\.(?:png|jpg|jpeg|gif|svg|webp|bmp|ico))\)', 'image'),
+            # 图片格式：![alt](path)
+            (r'!\[([^\]]*)\]\(([^)\n]+\.(?:png|jpg|jpeg|gif|svg|webp|bmp|ico))\)', 'image'),
             # 媒体文件链接格式
-            (r'(?<!)!\[([^\]]*)\]\((.+\.(?:mp3|mp4|mov|avi|wav|m4a|aac|ogg|flac|mkv|webm|wmv|flv))\)', 'media'),
+            (r'!\[([^\]]*)\]\(([^)\n]+\.(?:mp3|mp4|mov|avi|wav|m4a|aac|ogg|flac|mkv|webm|wmv|flv))\)', 'media'),
         ]
 
         for pattern, media_type_hint in patterns:

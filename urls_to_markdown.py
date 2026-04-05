@@ -1,9 +1,10 @@
 """
 将输入的Web页面链接转换为Markdown文档：
-1. 复制URL到剪贴板，每行一个URL；
+1. 从剪贴板或本地文件读取URL；
 2. 网页内容保存为markdown文件，媒体文件保存到media文件夹；
 """
 
+import argparse
 import asyncio
 import logging
 from utilities import URLToMarkdownConverter
@@ -13,7 +14,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-async def main():
+def parse_args():
+    parser = argparse.ArgumentParser(description="将URL批量转换为Markdown")
+    parser.add_argument("--url-batch-file", help="包含 URL 或 {title,url} 列表的本地 JSON/TXT 文件")
+    return parser.parse_args()
+
+
+async def main(url_batch_file=None):
     """
     主函数 - 从剪贴板读取URL并转换为Markdown
     """
@@ -22,16 +29,21 @@ async def main():
     
     converter = URLToMarkdownConverter(output_dir=str(get_urls_path()))
 
-    if not converter.is_clipboard_available():
+    if not url_batch_file and not converter.is_clipboard_available():
         print("❌ 错误: pyperclip库未安装")
         print("请运行: pip install pyperclip")
         return False
 
-    print("正在从剪贴板读取URL...")
+    if url_batch_file:
+        print(f"正在从文件读取URL: {url_batch_file}")
+    else:
+        print("正在从剪贴板读取URL...")
 
     try:
-        # 从剪贴板读取并转换URL
-        successful_files = await converter.convert_urls_from_clipboard(download_media=True)
+        if url_batch_file:
+            successful_files = await converter.convert_urls_from_file(url_batch_file, download_media=True)
+        else:
+            successful_files = await converter.convert_urls_from_clipboard(download_media=True)
 
         # 显示结果
         print("\n" + "=" * 50)
@@ -62,5 +74,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    # 运行示例
-    asyncio.run(main())
+    args = parse_args()
+    asyncio.run(main(url_batch_file=args.url_batch_file))
