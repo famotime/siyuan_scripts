@@ -52,11 +52,17 @@ class SpecialSiteHandler:
         }
 
     def _is_unavailable_content(self, text: str) -> bool:
-        """判断页面是否提示文章已失效或不可访问。"""
+        """判断页面是否提示文章已失效或不可访问。
+
+        传入内容可能包含 HTML 标签，需先剥离标签和属性值再检查，
+        避免图片 URL 等内容中的数字（如 404）造成误判。
+        """
         if not text:
             return False
 
-        normalized = re.sub(r"\s+", "", text).lower()
+        # 剥离 HTML 标签及属性，仅保留可见文本
+        stripped = re.sub(r"<[^>]+>", " ", text)
+        normalized = re.sub(r"\s+", "", stripped).lower()
         unavailable_markers = [
             "内容不存在",
             "文章不存在",
@@ -64,7 +70,7 @@ class SpecialSiteHandler:
             "已删除",
             "无法查看",
             "暂时无法访问",
-            "404",
+            "404notfound",
             "page not found",
             "content unavailable",
         ]
@@ -235,6 +241,18 @@ class SpecialSiteHandler:
                         pass
                     html_content = page.content()
 
+                # 微头条图片兜底：.weitoutiao-content 只含文字，图片在父容器
+                # .weitoutiao 的 .image-list 中，短内容时升级到父容器
+                if (matched_selector == '.weitoutiao-content'
+                        and html_content and len(html_content.strip()) < 200):
+                    wt_loc = page.locator('.weitoutiao')
+                    if wt_loc.count() > 0:
+                        handle = wt_loc.first.element_handle()
+                        if handle:
+                            html_content = handle.evaluate('el => el.outerHTML')
+                            matched_selector = '.weitoutiao'
+                            logger.info("升级到父容器 .weitoutiao 以包含图片内容")
+
                 if self._is_unavailable_content(html_content):
                     self._set_last_error("ARTICLE_UNAVAILABLE", "页面提示内容不存在或已失效", "content")
                     return None
@@ -318,28 +336,50 @@ class SpecialSiteHandler:
                     pass
 
                 author = ""
+                publish_time = ""
                 try:
-                    for sel in ['.article-author', '.author-name', '[data-testid="author"]', '.byline-author', '[class*="author"]', '[class*="source"]', '.source']:
-                        loc = page.locator(sel)
-                        if loc.count() > 0:
-                            txt = (loc.first.inner_text() or '').strip()
-                            if txt:
-                                author = txt
-                                break
+                    # 优先从文章元信息区域提取（避免匹配推荐流中的元素）
+                    meta_loc = page.locator('.article-meta')
+                    if meta_loc.count() > 0:
+                        meta_text = (meta_loc.first.inner_text() or '').strip()
+                        # 典型格式："2026-04-24 13:40·程序员鱼皮"
+                        if '·' in meta_text:
+                            parts = meta_text.split('·', 1)
+                            time_part = parts[0].strip()
+                            author_part = parts[1].strip()
+                            if time_part:
+                                publish_time = time_part
+                            if author_part:
+                                author = author_part
+                        elif meta_text:
+                            # 无法拆分，整段作为时间（后续兜底可覆盖）
+                            publish_time = meta_text
                 except Exception:
                     pass
 
-                publish_time = ""
-                try:
-                    for sel in ['[class*="time"]', '[class*="date"]', 'time', '.publish-time', '.article-time']:
-                        loc = page.locator(sel)
-                        if loc.count() > 0:
-                            txt = (loc.first.inner_text() or '').strip()
-                            if txt and len(txt) > 5:
-                                publish_time = txt
-                                break
-                except Exception:
-                    pass
+                if not author:
+                    try:
+                        for sel in ['.article-author', '.author-name', '[data-testid="author"]', '.byline-author', '.article-info-author', '[class*="article-author"]', '.author-info-name']:
+                            loc = page.locator(sel)
+                            if loc.count() > 0:
+                                txt = (loc.first.inner_text() or '').strip()
+                                if txt:
+                                    author = txt
+                                    break
+                    except Exception:
+                        pass
+
+                if not publish_time:
+                    try:
+                        for sel in ['.article-time', '.publish-time', '.article-info-time', 'time', '[class*="article-time"]', '[class*="publish"]', '.author-info-desc']:
+                            loc = page.locator(sel)
+                            if loc.count() > 0:
+                                txt = (loc.first.inner_text() or '').strip()
+                                if txt and len(txt) >= 4:
+                                    publish_time = txt
+                                    break
+                    except Exception:
+                        pass
 
                 logger.info(f"成功提取内容 - 标题: {title[:50] if len(title) > 50 else title}")
 

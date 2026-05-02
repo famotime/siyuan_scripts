@@ -344,10 +344,10 @@ def post_siyuan_api(api_url: str, api_path: str, api_token: str = "", timeout: f
         if api_token and exc.code in (400, 401, 403):
             try:
                 return send_request(use_token=False)
-            except (error.URLError, error.HTTPError, TimeoutError, ValueError):
+            except (error.URLError, error.HTTPError, TimeoutError, ValueError, OSError):
                 return None
         return None
-    except (error.URLError, error.HTTPError, TimeoutError, ValueError):
+    except (error.URLError, error.HTTPError, TimeoutError, ValueError, OSError):
         return None
 
 
