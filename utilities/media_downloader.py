@@ -51,6 +51,26 @@ class MediaDownloader:
             'Connection': 'keep-alive',
         }
 
+        # 微信CDN域名列表（需要 Referer 才能下载图片）
+        self._weixin_cdn_domains = {'mmbiz.qpic.cn', 'mmbiz.qlogo.cn'}
+
+    def _get_headers_for_url(self, url: str) -> dict:
+        """
+        根据URL域名返回合适的请求头。
+        微信CDN图片需要携带 Referer 才能正常下载。
+
+        :param url: 媒体文件URL
+        :return: 请求头字典
+        """
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            if any(cdn in domain for cdn in self._weixin_cdn_domains):
+                return {**self.headers, 'Referer': 'https://mp.weixin.qq.com/'}
+        except Exception:
+            pass
+        return self.headers
+
     def get_file_extension(self, url: str, content_type: str = None) -> str:
         """
         获取文件扩展名
@@ -122,9 +142,10 @@ class MediaDownloader:
             else:
                 full_url = url
 
-            # logger.info(f"下载媒体文件: {full_url}")
+            # 根据域名选择合适的请求头
+            download_headers = self._get_headers_for_url(full_url)
 
-            async with session.get(full_url, headers=self.headers) as response:
+            async with session.get(full_url, headers=download_headers) as response:
                 if response.status != 200:
                     logger.warning(f"下载失败，状态码: {response.status}, URL: {full_url}")
                     return None

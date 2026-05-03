@@ -501,7 +501,7 @@ class URLToMarkdownConverter:
                 #     logger.warning("未发现任何媒体文件URL")
 
             # 清理HTML内容
-            clean_html = self.html_converter.clean_html_for_conversion(html_content)
+            clean_html = self.html_converter.clean_html_for_conversion(html_content, source_url=url)
             clean_html = self._unwrap_image_links_for_x(clean_html, url)
 
             # 转换为Markdown

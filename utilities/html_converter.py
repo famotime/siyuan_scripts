@@ -161,11 +161,12 @@ class HTMLConverter:
         # logger.info(f"总共提取到 {len(media_urls)} 个媒体URL")
         return list(media_urls)
 
-    def clean_html_for_conversion(self, html_content: str) -> str:
+    def clean_html_for_conversion(self, html_content: str, source_url: str = "") -> str:
         """
         清理HTML内容用于转换
 
         :param html_content: 原始HTML
+        :param source_url: 源URL，用于站点特定的内容提取策略
         :return: 清理后的HTML
         """
         if not HAS_BS4:
@@ -187,6 +188,11 @@ class HTMLConverter:
                         logger.debug(f"将 {attr} 移动到 src: {lazy_src[:50]}...")
                         break
 
+        # 微信公众号专用预处理
+        is_weixin = self._is_weixin_url(source_url)
+        if is_weixin:
+            self._clean_weixin_specific(soup)
+
         # 移除不需要的标签
         unwanted_tags = [
             'script', 'style', 'nav', 'header', 'footer', 'aside',
@@ -204,17 +210,31 @@ class HTMLConverter:
 
         # 尝试提取主要内容
         main_content = None
-        content_selectors = [
+
+        # 微信公众号专用选择器（优先匹配）
+        weixin_selectors = [
+            '#js_content',                    # 微信文章正文主容器
+            '.rich_media_content',            # 富媒体内容区域
+            '#page-content',                  # 页面内容区域
+            '.rich_media_area_primary_inner', # 主内容区内层
+        ]
+
+        # 通用选择器
+        generic_selectors = [
             'main', 'article', '[role="main"]',
             '.content', '#content', '.main', '#main',
             '.post-content', '.entry-content', '.article-content',
             '.post-body', '.entry-body'
         ]
 
+        # 根据URL类型选择优先的选择器列表
+        content_selectors = weixin_selectors + generic_selectors if is_weixin else generic_selectors + weixin_selectors
+
         for selector in content_selectors:
             element = soup.select_one(selector)
             if element and len(element.get_text().strip()) > 200:
                 main_content = element
+                logger.info(f"使用选择器 '{selector}' 提取到主要内容")
                 break
 
         if main_content:
@@ -223,6 +243,55 @@ class HTMLConverter:
             # 如果没有找到主要内容，使用body
             body = soup.find('body')
             return str(body) if body else str(soup)
+
+    @staticmethod
+    def _is_weixin_url(url: str) -> bool:
+        """判断是否为微信公众号URL"""
+        if not url:
+            return False
+        return 'mp.weixin.qq.com' in url
+
+    @staticmethod
+    def _clean_weixin_specific(soup: 'BeautifulSoup') -> None:
+        """微信公众号页面专用清理：移除广告、推荐等非正文元素"""
+        # 移除微信特有的非正文区域
+        noise_selectors = [
+            '#js_pc_qr_code',             # PC端二维码引导
+            '#content_bottom_area',        # 底部区域
+            '.reward_area',                # 赞赏区域
+            '#js_profile_qrcode',         # 公众号二维码
+            '.rich_media_tool',            # 工具栏
+            '#js_toobar3',                 # 底部工具栏
+            '.qr_code_pc',                # PC二维码
+            '#js_share_source',           # 分享来源
+            '.rich_media_area_extra',     # 额外区域（推荐关注等）
+            '#js_tags_preview_toast',     # 标签预览
+            '.function_mod',              # 功能模块
+            '#js_read_area3',             # 阅读区域3（底部推荐阅读）
+            '.reward_area_primary',       # 赞赏主区域
+            '#js_reward_area',            # 赞赏区域
+            '.rich_media_area_ft',        # 底部区域
+            '#js_toobar',                 # 工具栏
+            '.media_tool_meta',           # 媒体工具元信息
+            '.article-tag-card',          # 文章标签卡片
+            '.rich_media_title_wrp',      # 标题包装器（保留标题本身）
+            # 赞赏弹窗区域（Playwright 渲染后的实际选择器）
+            '.reward_dialog',             # 赞赏弹窗
+            '.discuss_more_dialog_wrp',   # 讨论弹窗
+            '.author_profile-info',       # 作者信息卡（弹窗内）
+            '.author_profile-pay_area',   # 支付区域
+            '.author_profile-articles',   # 作品列表
+            '.dialog-pay',                # 支付弹窗
+        ]
+        for selector in noise_selectors:
+            for element in soup.select(selector):
+                element.decompose()
+        # 移除 role=dialog 的元素（赞赏弹窗等）
+        for element in soup.find_all(attrs={"role": "dialog"}):
+            element.decompose()
+        # 移除 visibility:hidden 的元素
+        for element in soup.find_all(style=re.compile(r'visibility\s*:\s*hidden')):
+            element.decompose()
 
     def _clean_html_simple(self, html_content: str) -> str:
         """简单的HTML清理"""

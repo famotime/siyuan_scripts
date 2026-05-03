@@ -40,6 +40,7 @@ class SpecialSiteHandler:
             'm.toutiao.com': self._handle_toutiao,
             'x.com': self._handle_x_post,
             'twitter.com': self._handle_x_post,
+            'mp.weixin.qq.com': self._handle_weixin,
         }
         # Playwright 模式无需驱动管理
 
@@ -397,6 +398,269 @@ class SpecialSiteHandler:
         except Exception as e:
             self._set_last_error("SPECIAL_HANDLER_ERROR", str(e), "playwright")
             logger.error(f"Playwright 处理今日头条链接失败: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return None
+        finally:
+            for target in (page, context, browser):
+                if target:
+                    try:
+                        target.close()
+                    except Exception:
+                        pass
+
+    def _handle_weixin(self, url: str) -> Optional[Dict[str, str]]:
+        """
+        处理微信公众号文章链接（mp.weixin.qq.com）。
+
+        微信文章页面需要 JavaScript 渲染，requests.get() 只能拿到 JS 壳页面，
+        必须使用 Playwright 渲染后才能提取 #js_content 中的实际内容。
+        """
+        if not HAS_PLAYWRIGHT:
+            logger.warning("Playwright 未安装，无法处理微信公众号文章")
+            self._set_last_error("PLAYWRIGHT_MISSING", "Playwright 未安装，无法处理微信公众号文章", "init")
+            return None
+
+        browser = None
+        context = None
+        page = None
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+                )
+                ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                context = browser.new_context(
+                    user_agent=ua,
+                    viewport={'width': 1280, 'height': 900},
+                    extra_http_headers={
+                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                        'Referer': 'https://mp.weixin.qq.com/',
+                    }
+                )
+                page = context.new_page()
+                logger.info(f"使用 Playwright 获取微信公众号文章: {url}")
+                page.goto(url, wait_until='domcontentloaded', timeout=self.goto_timeout_ms)
+                try:
+                    page.wait_for_load_state('networkidle', timeout=self.networkidle_timeout_ms)
+                except PlaywrightTimeoutError:
+                    logger.warning('networkidle 等待超时，继续处理')
+
+                # 等待 #js_content 渲染完成（微信文章正文容器）
+                try:
+                    page.wait_for_selector('#js_content', timeout=5000)
+                except PlaywrightTimeoutError:
+                    logger.warning('#js_content 未在预期时间内出现，尝试继续提取')
+
+                # 再等待一小段时间让内容完全渲染
+                time.sleep(0.5)
+
+                # 检查是否是不可用页面
+                quick_probe = ""
+                try:
+                    title = page.title() or ""
+                    body_text = page.locator('body').inner_text(timeout=2500) or ""
+                    quick_probe = f"{title}\n{body_text[:2000]}"
+                except Exception:
+                    pass
+
+                if self._is_unavailable_content(quick_probe):
+                    self._set_last_error("ARTICLE_UNAVAILABLE", "页面提示内容不存在或已失效", "probe")
+                    return None
+
+                # 清理非正文元素后再提取（微信页面特有噪声）
+                try:
+                    page.evaluate("""() => {
+                        // 限定清理范围到 #js_content 内部
+                        const root = document.getElementById('js_content') || document;
+                        const selectors = [
+                            '#js_pc_qr_code', '.reward_area', '#js_profile_qrcode',
+                            '.rich_media_tool', '#js_toobar3', '.qr_code_pc',
+                            '#js_share_source', '.rich_media_area_extra',
+                            '#js_tags_preview_toast', '.function_mod',
+                            '.reward_area_primary', '#js_reward_area',
+                            '.rich_media_area_ft', '#js_toobar', '.media_tool_meta',
+                            '.article-tag-card',
+                            // 赞赏弹窗区域
+                            '.reward_dialog', '.discuss_more_dialog_wrp',
+                            '.author_profile-info', '.author_profile-pay_area',
+                            '.author_profile-articles', '.dialog-pay',
+                            'div[role="dialog"]',
+                            '.reward_custom',
+                            '.rich_media_meta_list',
+                        ];
+                        selectors.forEach(sel => {
+                            root.querySelectorAll(sel).forEach(el => el.remove());
+                        });
+                        // 同时移除 visibility:hidden 的元素
+                        root.querySelectorAll('[style*="visibility: hidden"]').forEach(el => el.remove());
+                        // 清理 javascript:; 链接（话题标签等）
+                        root.querySelectorAll('a[href="javascript:;"]').forEach(el => {
+                            el.removeAttribute('href');
+                        });
+                    }""")
+                except Exception:
+                    pass
+
+                # 提取正文 HTML：优先使用 #js_content
+                content_selectors = [
+                    '#js_content',            # 微信文章正文主容器
+                    '.rich_media_content',    # 富媒体内容
+                    '#page-content',          # 页面内容
+                ]
+
+                html_content = None
+                for selector in content_selectors:
+                    try:
+                        loc = page.locator(selector)
+                        if loc.count() > 0:
+                            handle = loc.first.element_handle()
+                            if handle:
+                                html_content = handle.evaluate('el => el.outerHTML')
+                                if html_content and len(html_content.strip()) > 50:
+                                    logger.info(f"使用选择器 '{selector}' 提取到正文，长度: {len(html_content)}")
+                                    break
+                                html_content = None
+                    except Exception:
+                        continue
+
+                # 补充提取：微信「图片+文字」类型文章的主图在轮播组件中，
+                # 位于 #js_content 外部。将图片注入到 #js_content 内部，
+                # 确保后续内容选择器能包含图片。
+                #
+                # 轮播结构通常有两层：占位轮播（#img_swiper，仅 1 张）和
+                # 真实轮播（.share_media_swiper_wrp，包含全部图片）。
+                # 统一使用 .swiper_item_img img 从所有轮播项中提取并去重。
+                try:
+                    injected_count = page.evaluate("""() => {
+                        const jsContent = document.getElementById('js_content');
+                        if (!jsContent) return 0;
+                        let count = 0;
+                        const seen = new Set();
+                        // 从所有轮播项中提取图片（覆盖占位轮播和真实轮播）
+                        document.querySelectorAll('.swiper_item_img img').forEach(img => {
+                            const src = img.src || img.dataset.src || '';
+                            // 去掉查询参数后再去重，避免同一图片因占位轮播与真实轮播的 URL 参数不同而重复提取
+                            const key = src.split('?')[0];
+                            if (key && src.startsWith('http') && !seen.has(key)) {
+                                seen.add(key);
+                                const p = document.createElement('p');
+                                const newImg = document.createElement('img');
+                                newImg.src = src;
+                                p.appendChild(newImg);
+                                jsContent.appendChild(p);
+                                count++;
+                            }
+                        });
+                        return count;
+                    }""")
+                    if injected_count > 0:
+                        logger.info(f"补充注入 {injected_count} 张关联图片到正文末尾")
+                        # 重新提取 #js_content（包含注入的图片）
+                        loc = page.locator('#js_content')
+                        if loc.count() > 0:
+                            handle = loc.first.element_handle()
+                            if handle:
+                                html_content = handle.evaluate('el => el.outerHTML')
+                except Exception as e:
+                    logger.debug(f"补充图片注入失败: {e}")
+
+                # 兜底：使用整个页面
+                if not html_content:
+                    html_content = page.content()
+                    logger.info(f"使用整个页面内容，长度: {len(html_content)}")
+
+                # 提取标题
+                title = "未知标题"
+                title_selectors = [
+                    '#activity-name',         # 微信文章标题
+                    '.rich_media_title',      # 富媒体标题
+                    'h1.rich_media_title',
+                ]
+                for sel in title_selectors:
+                    try:
+                        loc = page.locator(sel)
+                        if loc.count() > 0:
+                            t = (loc.first.inner_text() or '').strip()
+                            if t:
+                                title = t
+                                logger.info(f"从 '{sel}' 获取标题: {title[:50]}")
+                                break
+                    except Exception:
+                        continue
+
+                if title == "未知标题":
+                    raw_title = (page.title() or '').strip()
+                    # 微信页面标题通常格式为 "文章标题"
+                    if raw_title and raw_title != '微信公众平台':
+                        title = raw_title
+
+                # 提取作者
+                author = ""
+                author_selectors = [
+                    '#js_name',                        # 公众号名称（首选）
+                    '.rich_media_meta_nickname a',     # 公众号昵称链接
+                    '#js_nickname',                    # 公众号昵称
+                    '.profile_nickname',               # 个人资料昵称
+                    '#profileBt',                      # 关注按钮（含公众号名）
+                ]
+                for sel in author_selectors:
+                    try:
+                        loc = page.locator(sel)
+                        if loc.count() > 0:
+                            a = (loc.first.inner_text() or '').strip()
+                            if a:
+                                author = a
+                                break
+                    except Exception:
+                        continue
+
+                # 提取发布时间
+                publish_time = ""
+                time_selectors = [
+                    '#publish_time',          # 发布时间
+                    '.rich_media_meta_date',
+                    'em#publish_time',
+                ]
+                for sel in time_selectors:
+                    try:
+                        loc = page.locator(sel)
+                        if loc.count() > 0:
+                            t = (loc.first.inner_text() or '').strip()
+                            if t:
+                                publish_time = t
+                                break
+                    except Exception:
+                        continue
+
+                # 提取描述
+                description = ""
+                try:
+                    og_desc = page.locator('meta[property="og:description"]').first
+                    if og_desc and og_desc.count() > 0:
+                        description = (og_desc.get_attribute('content') or '').strip()
+                except Exception:
+                    pass
+
+                logger.info(f"成功提取微信文章 - 标题: {title[:50]}")
+
+                return {
+                    'html_content': html_content,
+                    'title': title.strip() if title else "未知标题",
+                    'description': description.strip(),
+                    'author': author.strip(),
+                    'publish_time': publish_time.strip(),
+                }
+
+        except PlaywrightTimeoutError as e:
+            self._set_last_error("PLAYWRIGHT_TIMEOUT", f"动态渲染超时: {e}", "playwright")
+            logger.error(f"Playwright 处理微信文章超时: {e}")
+            return None
+        except Exception as e:
+            self._set_last_error("SPECIAL_HANDLER_ERROR", str(e), "playwright")
+            logger.error(f"Playwright 处理微信文章失败: {e}")
             import traceback
             logger.debug(traceback.format_exc())
             return None
